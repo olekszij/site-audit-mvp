@@ -99,7 +99,7 @@
         <!-- Category Filter Tabs -->
         <section class="mb-6 flex flex-wrap gap-2 border-b border-zinc-800 pb-4">
             <button onclick="filterCategory('all')" class="category-tab active rounded-full border border-zinc-700 bg-zinc-900 px-4 py-2 text-sm font-medium text-zinc-200 transition hover:bg-zinc-800" data-category="all">
-                All Issues
+                All Checks
             </button>
             <% Object.keys(insightsByCategory).forEach(category => { %>
                 <button onclick="filterCategory('<%= category %>')" class="category-tab rounded-full border border-zinc-700 bg-zinc-900 px-4 py-2 text-sm font-medium text-zinc-200 transition hover:bg-zinc-800" data-category="<%= category %>">
@@ -161,7 +161,7 @@
                                 <span class="text-2xl"><%= categoryIcons[category] || '📋' %></span>
                                 <div>
                                     <h2 class="text-lg font-semibold text-white"><%= category %></h2>
-                                    <p class="text-sm text-zinc-400"><%= insightsByCategory[category].length %> issues found</p>
+                                    <p class="text-sm text-zinc-400"><%= insightsByCategory[category].length %> checks performed</p>
                                 </div>
                             </div>
                             <svg class="h-5 w-5 transform transition-transform" id="icon-<%= category %>" fill="none" stroke="currentColor" viewBox="0 0 24 24">
