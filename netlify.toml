@@ -5,6 +5,13 @@
 [functions]
   node_bundler = "esbuild"
   included_files = ["views/**", "audit.js"]
+  external_node_modules = [
+    "axios",
+    "cheerio",
+    "ejs",
+    "express",
+    "serverless-http"
+  ]
 
 [[redirects]]
   from = "/audit"
