@@ -17,12 +17,21 @@ app.post('/audit', async (req, res) => {
   const submittedUrl = req.body.url || '';
 
   try {
+    console.log('Starting audit for:', submittedUrl);
     const targetUrl = normalizeUrl(submittedUrl);
+    console.log('Normalized URL:', targetUrl);
+    
     const audit = await runAudit(targetUrl);
+    console.log('Audit completed successfully');
     res.render('report', audit);
   } catch (error) {
-    res.status(500).render('index', {
+    console.error('Audit error:', error);
+    console.error('Error stack:', error.stack);
+    
+    // Return error as JSON for better debugging
+    res.status(500).json({
       error: error.message || 'Failed to perform site audit.',
+      details: error.stack,
       url: submittedUrl,
     });
   }

@@ -70,8 +70,9 @@
                 document.write(html);
                 document.close();
             } catch (error) {
+                console.error('Fetch error:', error);
                 errorContainer.classList.remove('hidden');
-                errorMessage.textContent = error.message;
+                errorMessage.textContent = error.message || 'Failed to perform site audit.';
             }
         });
     </script>
