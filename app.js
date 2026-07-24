@@ -22,7 +22,7 @@ app.post('/audit', async (req, res) => {
     res.render('report', audit);
   } catch (error) {
     res.status(500).render('index', {
-      error: error.message || 'Не удалось выполнить аудит сайта.',
+      error: error.message || 'Failed to perform site audit.',
       url: submittedUrl,
     });
   }

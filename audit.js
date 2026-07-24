@@ -16,7 +16,7 @@ const GOOD_CACHE_SECONDS = 7 * 24 * 60 * 60;
 
 function normalizeUrl(value) {
   if (!value || typeof value !== 'string') {
-    throw new Error('Введите URL для проверки.');
+    throw new Error('Enter URL to check.');
   }
 
   const trimmed = value.trim();
@@ -26,7 +26,7 @@ function normalizeUrl(value) {
   const parsed = new URL(withProtocol);
 
   if (!['http:', 'https:'].includes(parsed.protocol)) {
-    throw new Error('Поддерживаются только HTTP и HTTPS адреса.');
+    throw new Error('Only HTTP and HTTPS addresses are supported.');
   }
 
   parsed.hash = '';
@@ -82,7 +82,7 @@ async function runAudit(targetUrl) {
   return {
     targetUrl,
     finalUrl: fetchResult.finalUrl,
-    checkedAt: new Date().toLocaleString('ru-RU'),
+    checkedAt: new Date().toLocaleString('en-US'),
     loadTime: fetchResult.loadTime,
     insights,
     summary: buildSummary(insights),
@@ -128,7 +128,7 @@ async function fetchHtmlWithRedirects(startUrl) {
     };
   }
 
-  throw new Error('Слишком длинная цепочка редиректов.');
+  throw new Error('Redirect chain too long.');
 }
 
 function collectPageData($, baseUrl, html) {
@@ -314,33 +314,33 @@ function buildInsights({
     addInsight(
       insights,
       'danger',
-      'Техника',
-      'Сервер вернул ошибку ' + status,
-      'Страница недоступна для пользователей и поисковых роботов.',
+      'Technical',
+      'Server returned error ' + status,
+      'Page is unavailable to users and search bots.',
     );
   } else if (status >= 400) {
     addInsight(
       insights,
       'danger',
-      'Техника',
-      'Страница вернула статус ' + status,
-      'Такой URL не должен быть основной посадочной страницей.',
+      'Technical',
+      'Page returned status ' + status,
+      'Such URL should not be the main landing page.',
     );
   } else if (status >= 300) {
     addInsight(
       insights,
       'warning',
-      'Техника',
-      'Финальный статус ' + status,
-      'Проверьте, что редирект настроен намеренно.',
+      'Technical',
+      'Final status ' + status,
+      'Check that redirect is intentional.',
     );
   } else {
     addInsight(
       insights,
       'success',
-      'Техника',
-      'HTTP-статус в норме',
-      'Финальная страница отвечает кодом ' + status + '.',
+      'Technical',
+      'HTTP status is normal',
+      'Final page responds with code ' + status + '.',
     );
   }
 
@@ -352,11 +352,11 @@ function buildInsights({
     addInsight(
       insights,
       hasHttpToHttps ? 'success' : 'info',
-      'Техника',
-      'Цепочка редиректов: ' + redirects.length,
+      'Technical',
+      'Redirect chain: ' + redirects.length,
       hasHttpToHttps
-        ? 'HTTP-версия корректно переводит посетителя на HTTPS.'
-        : 'Есть промежуточные переходы. Чем короче цепочка, тем быстрее загрузка.',
+        ? 'HTTP version correctly redirects visitor to HTTPS.'
+        : 'There are intermediate redirects. Shorter chain means faster loading.',
       redirects.map(
         (redirect) => redirect.status + ': ' + redirect.from + ' -> ' + redirect.to,
       ),
@@ -365,9 +365,9 @@ function buildInsights({
     addInsight(
       insights,
       'warning',
-      'Безопасность',
-      'HTTP не перенаправляется на HTTPS',
-      'Для публичного сайта лучше настроить 301-редирект на защищённую версию.',
+      'Security',
+      'HTTP does not redirect to HTTPS',
+      'For public sites, it is better to set up 301 redirect to secure version.',
     );
   }
 
@@ -375,17 +375,17 @@ function buildInsights({
     addInsight(
       insights,
       'success',
-      'Техника',
-      'Тип контента подходит для HTML-страницы',
-      contentType ? 'Content-Type: ' + contentType : 'Сервер не указал Content-Type.',
+      'Technical',
+      'Content type suitable for HTML page',
+      contentType ? 'Content-Type: ' + contentType : 'Server did not specify Content-Type.',
     );
   } else {
     addInsight(
       insights,
       'warning',
-      'Техника',
-      'Необычный Content-Type',
-      'Ожидался HTML, но сервер вернул: ' + contentType + '.',
+      'Technical',
+      'Unusual Content-Type',
+      'Expected HTML, but server returned: ' + contentType + '.',
     );
   }
 
@@ -393,17 +393,17 @@ function buildInsights({
     addInsight(
       insights,
       'danger',
-      'Безопасность',
-      'Отсутствует HTTPS',
-      'Браузеры будут помечать сайт как небезопасный, а часть SEO-сигналов будет слабее.',
+      'Security',
+      'HTTPS missing',
+      'Browsers will mark site as unsafe, and some SEO signals will be weaker.',
     );
   } else {
     addInsight(
       insights,
       'success',
-      'Безопасность',
-      'HTTPS подключён',
-      'Финальный URL использует защищённый протокол.',
+      'Security',
+      'HTTPS enabled',
+      'Final URL uses secure protocol.',
     );
   }
 
@@ -436,8 +436,8 @@ function addTitleInsights(insights, page) {
       insights,
       'danger',
       'SEO',
-      'Отсутствует тег Title',
-      'Поисковым системам и вкладке браузера нечего показать как название страницы.',
+      'Title tag missing',
+      'Search engines and browser tab have nothing to show as page name.',
     );
     return;
   }
@@ -448,8 +448,8 @@ function addTitleInsights(insights, page) {
       insights,
       'warning',
       'SEO',
-      'Неоптимальная длина Title (' + length + ' симв.)',
-      'Ориентир для сниппета: 30-60 символов.',
+      'Suboptimal Title length (' + length + ' chars)',
+      'Guideline for snippet: 30-60 characters.',
       ['Title: ' + page.title],
     );
   } else {
@@ -457,8 +457,8 @@ function addTitleInsights(insights, page) {
       insights,
       'success',
       'SEO',
-      'Title хорошей длины',
-      'Заголовок страницы попадает в рекомендуемый диапазон.',
+      'Title has good length',
+      'Page title falls within recommended range.',
       ['Title: ' + page.title],
     );
   }
@@ -468,8 +468,8 @@ function addTitleInsights(insights, page) {
       insights,
       'warning',
       'SEO',
-      'Title слишком общий',
-      'Название вроде "Home" или "Главная" плохо объясняет ценность страницы.',
+      'Title too generic',
+      'Name like "Home" or "Main" poorly explains page value.',
       ['Title: ' + page.title],
     );
   }
@@ -482,8 +482,8 @@ function addTitleInsights(insights, page) {
       insights,
       'info',
       'SEO',
-      'Title и H1 совпадают',
-      'Это не ошибка, но часто лучше дать title чуть больше контекста для поиска.',
+      'Title and H1 match',
+      'This is not an error, but often better to give title slightly more context for search.',
       ['Title: ' + page.title],
     );
   }
@@ -495,8 +495,8 @@ function addDescriptionInsights(insights, description) {
       insights,
       'danger',
       'SEO',
-      'Нет meta description',
-      'В поисковой выдаче может появиться случайный фрагмент текста со страницы.',
+      'No meta description',
+      'Random text fragment from page may appear in search results.',
     );
     return;
   }
@@ -507,8 +507,8 @@ function addDescriptionInsights(insights, description) {
       insights,
       'warning',
       'SEO',
-      'Неоптимальная длина description (' + length + ' симв.)',
-      'Хороший ориентир для сниппета: 70-160 символов.',
+      'Suboptimal description length (' + length + ' chars)',
+      'Good guideline for snippet: 70-160 characters.',
       ['Meta description: ' + description],
     );
   } else {
@@ -516,8 +516,8 @@ function addDescriptionInsights(insights, description) {
       insights,
       'success',
       'SEO',
-      'Meta description заполнен корректно',
-      'Описание страницы попадает в рабочий диапазон длины.',
+      'Meta description filled correctly',
+      'Product description falls within working length range.',
       ['Meta description: ' + description],
     );
   }
@@ -529,16 +529,16 @@ function addHeadingInsights(insights, page) {
       insights,
       'danger',
       'SEO',
-      'Отсутствует H1',
-      'Поисковым системам сложнее определить основную тему страницы.',
+      'H1 missing',
+      'Search engines have harder time determining main page topic.',
     );
   } else if (page.h1.length > 1) {
     addInsight(
       insights,
       'warning',
       'SEO',
-      'Найдено несколько H1 (' + page.h1.length + ')',
-      'Лучше оставить один главный заголовок страницы.',
+      'Multiple H1 found (' + page.h1.length + ')',
+      'Better to keep one main page heading.',
       page.h1.map((heading) => heading.text).filter(Boolean).slice(0, 5),
     );
   } else {
@@ -546,8 +546,8 @@ function addHeadingInsights(insights, page) {
       insights,
       'success',
       'SEO',
-      'H1 найден',
-      'Главный заголовок: "' + page.h1[0].text + '".',
+      'H1 found',
+      'Main heading: "' + page.h1[0].text + '".',
     );
   }
 
@@ -558,9 +558,9 @@ function addHeadingInsights(insights, page) {
     addInsight(
       insights,
       'warning',
-      'Доступность',
-      'Есть пустые заголовки',
-      'Пустые H-теги мешают навигации скринридеров и размывают структуру страницы.',
+      'Accessibility',
+      'Empty headings found',
+      'Empty H-tags hinder screen reader navigation and blur page structure.',
     );
   }
 
@@ -569,8 +569,8 @@ function addHeadingInsights(insights, page) {
       insights,
       'warning',
       'SEO',
-      'Нарушена иерархия заголовков',
-      'Есть переходы через уровень, например H2 сразу к H4.',
+      'Heading hierarchy broken',
+      'There are level skips, e.g., H2 directly to H4.',
       skippedLevels.slice(0, 5),
     );
   } else if (page.headings.length > 0) {
@@ -578,8 +578,8 @@ function addHeadingInsights(insights, page) {
       insights,
       'success',
       'SEO',
-      'Иерархия заголовков выглядит последовательно',
-      'Крупных пропусков уровней H1-H6 не найдено.',
+      'Heading hierarchy looks sequential',
+      'No major H1-H6 level gaps found.',
     );
   }
 }
@@ -590,19 +590,19 @@ function addIndexingInsights(insights, page, robotsAudit) {
     addInsight(
       insights,
       'danger',
-      'Индексация',
-      'Meta robots запрещает индексацию или переходы',
-      'На странице найдены директивы: ' + page.robots + '.',
+      'Indexing',
+      'Meta robots blocks indexing or links',
+      'Directives found on page: ' + page.robots + '.',
     );
   } else {
     addInsight(
       insights,
       'success',
-      'Индексация',
-      'Meta robots не блокирует страницу',
+      'Indexing',
+      'Meta robots does not block page',
       page.robots
-        ? 'Текущие директивы: ' + page.robots + '.'
-        : 'Запрещающих meta robots директив не найдено.',
+        ? 'Current directives: ' + page.robots + '.'
+        : 'No blocking meta robots directives found.',
     );
   }
 
@@ -610,29 +610,29 @@ function addIndexingInsights(insights, page, robotsAudit) {
     addInsight(
       insights,
       'warning',
-      'Индексация',
-      'robots.txt не найден',
-      'Файл не обязателен, но он помогает управлять обходом сайта.',
+      'Indexing',
+      'robots.txt not found',
+      'File is not required, but helps control site crawling.',
       [robotsAudit.robots.url],
     );
   } else if (robotsAudit.robots.blocksTarget || robotsAudit.robots.blocksAll) {
     addInsight(
       insights,
       'danger',
-      'Индексация',
-      'robots.txt блокирует страницу',
+      'Indexing',
+      'robots.txt blocks page',
       robotsAudit.robots.blocksAll
-        ? 'Для User-agent: * найден запрет Disallow: /.'
-        : 'Правила robots.txt запрещают обход проверяемого пути.',
+        ? 'For User-agent: * found Disallow: /.'
+        : 'robots.txt rules prohibit crawling checked path.',
       [robotsAudit.robots.url],
     );
   } else {
     addInsight(
       insights,
       'success',
-      'Индексация',
-      'robots.txt не блокирует проверяемую страницу',
-      'Файл доступен и не содержит явного запрета для этого URL.',
+      'Indexing',
+      'robots.txt does not block checked page',
+      'File is available and does not contain explicit ban for this URL.',
       [robotsAudit.robots.url],
     );
   }
@@ -641,20 +641,20 @@ function addIndexingInsights(insights, page, robotsAudit) {
     addInsight(
       insights,
       robotsAudit.sitemap.validXml ? 'success' : 'warning',
-      'Индексация',
-      'Sitemap найден',
+      'Indexing',
+      'Sitemap found',
       robotsAudit.sitemap.validXml
-        ? 'Карта сайта похожа на валидный XML sitemap.'
-        : 'Файл доступен, но не похож на стандартный sitemap XML.',
+        ? 'Site map looks like valid XML sitemap.'
+        : 'File is available but does not look like standard sitemap XML.',
       [robotsAudit.sitemap.url],
     );
   } else {
     addInsight(
       insights,
       'warning',
-      'Индексация',
-      'Sitemap не найден',
-      'Добавьте sitemap.xml или ссылку Sitemap в robots.txt, чтобы ускорить обнаружение страниц.',
+      'Indexing',
+      'Sitemap not found',
+      'Add sitemap.xml or Sitemap link in robots.txt to speed up page discovery.',
       robotsAudit.sitemap.checkedUrls,
     );
   }
@@ -666,8 +666,8 @@ function addCanonicalInsights(insights, canonicalAudit) {
       insights,
       'warning',
       'SEO',
-      'Не указан canonical',
-      'Поисковики могут индексировать дубли страниц с параметрами или альтернативными URL.',
+      'Canonical not specified',
+      'Search engines may index page duplicates with parameters or alternative URLs.',
     );
     return;
   }
@@ -677,8 +677,8 @@ function addCanonicalInsights(insights, canonicalAudit) {
       insights,
       'danger',
       'SEO',
-      'Canonical невозможно прочитать',
-      'Значение canonical не удалось привести к HTTP/HTTPS URL.',
+      'Canonical cannot be read',
+      'Canonical value could not be converted to HTTP/HTTPS URL.',
       [canonicalAudit.value],
     );
     return;
@@ -686,7 +686,7 @@ function addCanonicalInsights(insights, canonicalAudit) {
 
   const details = [
     'Canonical: ' + canonicalAudit.absoluteUrl,
-    canonicalAudit.status ? 'Статус: ' + canonicalAudit.status : null,
+    canonicalAudit.status ? 'Status: ' + canonicalAudit.status : null,
   ].filter(Boolean);
 
   if (!canonicalAudit.isAbsolute) {
@@ -694,8 +694,8 @@ function addCanonicalInsights(insights, canonicalAudit) {
       insights,
       'warning',
       'SEO',
-      'Canonical указан относительным URL',
-      'Лучше использовать полный абсолютный адрес.',
+      'Canonical specified as relative URL',
+      'Better to use full absolute address.',
       details,
     );
   } else if (!canonicalAudit.sameDomain) {
@@ -703,8 +703,8 @@ function addCanonicalInsights(insights, canonicalAudit) {
       insights,
       'warning',
       'SEO',
-      'Canonical ведёт на другой домен',
-      'Это допустимо только если вы осознанно передаёте каноничность другой версии страницы.',
+      'Canonical points to different domain',
+      'This is acceptable only if you intentionally pass canonicality to another page version.',
       details,
     );
   } else if (!canonicalAudit.ok) {
@@ -712,8 +712,8 @@ function addCanonicalInsights(insights, canonicalAudit) {
       insights,
       'danger',
       'SEO',
-      'Canonical ведёт на недоступный URL',
-      'Канонический адрес должен открываться без ошибок.',
+      'Canonical points to unavailable URL',
+      'Canonical address must open without errors.',
       details,
     );
   } else {
@@ -721,8 +721,8 @@ function addCanonicalInsights(insights, canonicalAudit) {
       insights,
       'success',
       'SEO',
-      'Canonical настроен корректно',
-      'Канонический URL абсолютный, доступный и находится на том же домене.',
+      'Canonical configured correctly',
+      'Canonical URL is absolute, available and on same domain.',
       details,
     );
   }
@@ -738,30 +738,30 @@ function addMediaInsights(insights, page, ogImageAudit, resourceAudit) {
     addInsight(
       insights,
       'info',
-      'Медиа',
-      'Изображений на странице не найдено',
-      'Если страница продающая или контентная, визуальный блок может улучшить вовлечение.',
+      'Media',
+      'No images found on page',
+      'If page is selling or content-based, visual block can improve engagement.',
     );
   } else if (missingAlt > 0 || emptyAlt > 0) {
     addInsight(
       insights,
       'warning',
-      'Доступность',
-      'Проблемы с alt у изображений',
-      'Без alt страница хуже доступна и теряет часть сигналов для поиска по изображениям.',
+      'Accessibility',
+      'Image alt issues',
+      'Without alt, page is less accessible and loses image search signals.',
       [
-        'Без alt: ' + missingAlt,
-        'Пустой alt: ' + emptyAlt,
-        'Всего изображений: ' + page.images.length,
+        'Missing alt: ' + missingAlt,
+        'Empty alt: ' + emptyAlt,
+        'Total images: ' + page.images.length,
       ],
     );
   } else {
     addInsight(
       insights,
       'success',
-      'Доступность',
-      'Alt у изображений заполнен',
-      'Все найденные изображения имеют непустой alt.',
+      'Accessibility',
+      'Image alt filled',
+      'All found images have non-empty alt.',
     );
   }
 
@@ -772,18 +772,18 @@ function addMediaInsights(insights, page, ogImageAudit, resourceAudit) {
     addInsight(
       insights,
       'warning',
-      'Производительность',
-      'У изображений нет width/height',
-      'Размеры помогают браузеру заранее зарезервировать место и снизить сдвиги макета.',
-      ['Без размеров: ' + missingDimensions + ' / ' + page.images.length],
+      'Performance',
+      'Images missing width/height',
+      'Dimensions help browser reserve space in advance and reduce layout shifts.',
+      ['Missing dimensions: ' + missingDimensions + ' / ' + page.images.length],
     );
   } else if (page.images.length > 0) {
     addInsight(
       insights,
       'success',
-      'Производительность',
-      'Размеры изображений заданы',
-      'У всех найденных изображений есть width и height.',
+      'Performance',
+      'Image dimensions set',
+      'All found images have width and height.',
     );
   }
 
@@ -798,10 +798,10 @@ function addMediaInsights(insights, page, ogImageAudit, resourceAudit) {
     addInsight(
       insights,
       'info',
-      'Производительность',
-      'Есть кандидаты для lazy loading',
-      'Изображения ниже первых блоков часто можно грузить лениво через loading="lazy".',
-      ['Кандидатов: ' + lazyCandidates.length],
+      'Performance',
+      'Lazy loading candidates found',
+      'Images below first blocks can often be loaded lazily via loading="lazy".',
+      ['Candidates: ' + lazyCandidates.length],
     );
   }
 
@@ -809,9 +809,9 @@ function addMediaInsights(insights, page, ogImageAudit, resourceAudit) {
     addInsight(
       insights,
       'warning',
-      'Производительность',
-      'Найдены тяжёлые изображения',
-      'Изображения больше 500 KB могут заметно замедлять страницу.',
+      'Performance',
+      'Heavy images found',
+      'Images larger than 500 KB can significantly slow down page.',
       resourceAudit.heavyImages
         .slice(0, 5)
         .map((image) => formatBytes(image.bytes) + ' - ' + image.url),
@@ -822,27 +822,27 @@ function addMediaInsights(insights, page, ogImageAudit, resourceAudit) {
     addInsight(
       insights,
       'warning',
-      'Соцсети',
-      'OG image указан некорректно',
-      'Изображение для превью должно быть доступным HTTP/HTTPS URL.',
+      'Social',
+      'OG image specified incorrectly',
+      'Preview image must be accessible HTTP/HTTPS URL.',
       [page.ogImage.value],
     );
   } else if (page.ogImage && ogImageAudit && !ogImageAudit.ok) {
     addInsight(
       insights,
       'warning',
-      'Соцсети',
-      'OG image недоступен',
-      'Социальные сети могут не сформировать превью.',
+      'Social',
+      'OG image unavailable',
+      'Social networks may not generate preview.',
       [page.ogImage.absoluteUrl],
     );
   } else if (page.ogImage) {
     addInsight(
       insights,
       'success',
-      'Соцсети',
-      'OG image доступен',
-      'Изображение для превью открывается без ошибки.',
+      'Social',
+      'OG image available',
+      'Preview image opens without error.',
     );
   }
 }
@@ -857,18 +857,18 @@ function addSocialInsights(insights, page) {
     addInsight(
       insights,
       'warning',
-      'Соцсети',
-      'Open Graph заполнен не полностью',
-      'При репосте ссылка может выглядеть слабее или без изображения.',
+      'Social',
+      'Open Graph incomplete',
+      'When reposting, link may look weaker or without image.',
       missingOg,
     );
   } else {
     addInsight(
       insights,
       'success',
-      'Соцсети',
-      'Open Graph настроен',
-      'Основные OG-теги для превью присутствуют.',
+      'Social',
+      'Open Graph configured',
+      'Main OG tags for preview are present.',
     );
   }
 
@@ -882,18 +882,18 @@ function addSocialInsights(insights, page) {
     addInsight(
       insights,
       'warning',
-      'Соцсети',
-      'Twitter Card заполнен не полностью',
-      'Для X/Twitter и похожих клиентов лучше добавить полный набор тегов.',
+      'Social',
+      'Twitter Card incomplete',
+      'For X/Twitter and similar clients, better to add full tag set.',
       missingTwitter,
     );
   } else {
     addInsight(
       insights,
       'success',
-      'Соцсети',
-      'Twitter Card настроен',
-      'Все основные Twitter meta-теги найдены.',
+      'Social',
+      'Twitter Card configured',
+      'All main Twitter meta tags found.',
     );
   }
 }
@@ -903,18 +903,18 @@ function addContentInsights(insights, page) {
     addInsight(
       insights,
       'warning',
-      'Контент',
-      'На странице мало текста',
-      'Тонкие страницы сложнее ранжировать по содержательным запросам.',
-      ['Слов: ' + page.wordCount],
+      'Content',
+      'Little text on page',
+      'Thin pages are harder to rank for content queries.',
+      ['Words: ' + page.wordCount],
     );
   } else {
     addInsight(
       insights,
       'success',
-      'Контент',
-      'Объём текста выглядит достаточным',
-      'На странице найдено примерно ' + page.wordCount + ' слов.',
+      'Content',
+      'Text volume looks sufficient',
+      'Approximately ' + page.wordCount + ' words found on page.',
     );
   }
 
@@ -924,16 +924,16 @@ function addContentInsights(insights, page) {
       insights,
       'info',
       'SEO',
-      'JSON-LD/schema.org не найден',
-      'Структурированные данные не обязательны, но могут улучшить расширенные сниппеты.',
+      'JSON-LD/schema.org not found',
+      'Structured data not required, but can improve rich snippets.',
     );
   } else if (invalidJsonLd.length > 0) {
     addInsight(
       insights,
       'danger',
       'SEO',
-      'JSON-LD содержит ошибки',
-      'Некорректный JSON не будет обработан поисковыми системами.',
+      'JSON-LD contains errors',
+      'Incorrect JSON will not be processed by search engines.',
       invalidJsonLd.slice(0, 3).map((script) => script.error),
     );
   } else {
@@ -941,8 +941,8 @@ function addContentInsights(insights, page) {
       insights,
       'success',
       'SEO',
-      'JSON-LD валиден',
-      'Найдено блоков структурированных данных: ' + page.jsonLdScripts.length + '.',
+      'JSON-LD valid',
+      'Structured data blocks found: ' + page.jsonLdScripts.length + '.',
     );
   }
 }
@@ -958,25 +958,25 @@ function addPerformanceInsights(
     addInsight(
       insights,
       'danger',
-      'Производительность',
-      'Очень медленный ответ (' + loadTime + ' мс)',
-      'Проверьте сервер, кеширование и тяжёлые блокирующие ресурсы.',
+      'Performance',
+      'Very slow response (' + loadTime + ' ms)',
+      'Check server, caching and heavy blocking resources.',
     );
   } else if (loadTime > 2000) {
     addInsight(
       insights,
       'warning',
-      'Производительность',
-      'Медленный ответ сервера (' + loadTime + ' мс)',
-      'Страница отвечает дольше 2 секунд.',
+      'Performance',
+      'Slow server response (' + loadTime + ' ms)',
+      'Page responds longer than 2 seconds.',
     );
   } else {
     addInsight(
       insights,
       'success',
-      'Производительность',
-      'Сервер отвечает быстро',
-      'Ответ получен за ' + loadTime + ' мс.',
+      'Performance',
+      'Server responds quickly',
+      'Response received in ' + loadTime + ' ms.',
     );
   }
 
@@ -984,27 +984,27 @@ function addPerformanceInsights(
     addInsight(
       insights,
       'danger',
-      'Производительность',
-      'HTML слишком тяжёлый',
-      'Размер HTML превышает 500 KB до учёта внешних ресурсов.',
+      'Performance',
+      'HTML too heavy',
+      'HTML size exceeds 500 KB before accounting for external resources.',
       [formatBytes(page.htmlSizeBytes)],
     );
   } else if (page.htmlSizeBytes > 200 * 1024) {
     addInsight(
       insights,
       'warning',
-      'Производительность',
-      'HTML крупнее обычного',
-      'Стоит проверить встроенные стили, данные и лишнюю разметку.',
+      'Performance',
+      'HTML larger than usual',
+      'Worth checking inline styles, data and extra markup.',
       [formatBytes(page.htmlSizeBytes)],
     );
   } else {
     addInsight(
       insights,
       'success',
-      'Производительность',
-      'Размер HTML в норме',
-      'HTML весит ' + formatBytes(page.htmlSizeBytes) + '.',
+      'Performance',
+      'HTML size normal',
+      'HTML weighs ' + formatBytes(page.htmlSizeBytes) + '.',
     );
   }
 
@@ -1012,17 +1012,17 @@ function addPerformanceInsights(
     addInsight(
       insights,
       'success',
-      'Производительность',
-      'Сжатие включено',
-      'Сервер отдаёт страницу с Content-Encoding: ' + compressionAudit.encoding + '.',
+      'Performance',
+      'Compression enabled',
+      'Server serves page with Content-Encoding: ' + compressionAudit.encoding + '.',
     );
   } else {
     addInsight(
       insights,
       'warning',
-      'Производительность',
-      'Сжатие не обнаружено',
-      'Для HTML/CSS/JS обычно стоит включить gzip или brotli.',
+      'Performance',
+      'Compression not detected',
+      'For HTML/CSS/JS usually worth enabling gzip or brotli.',
     );
   }
 
@@ -1031,17 +1031,17 @@ function addPerformanceInsights(
     addInsight(
       insights,
       'warning',
-      'Производительность',
-      'Много JS/CSS файлов',
-      'Большое количество внешних файлов увеличивает накладные расходы загрузки.',
+      'Performance',
+      'Many JS/CSS files',
+      'Large number of external files increases loading overhead.',
       ['JS: ' + page.scripts.length, 'CSS: ' + page.stylesheets.length],
     );
   } else {
     addInsight(
       insights,
       assetCount > 0 ? 'success' : 'info',
-      'Производительность',
-      'Количество JS/CSS файлов приемлемое',
+      'Performance',
+      'JS/CSS file count acceptable',
       'JS: ' + page.scripts.length + ', CSS: ' + page.stylesheets.length + '.',
     );
   }
@@ -1050,9 +1050,9 @@ function addPerformanceInsights(
     addInsight(
       insights,
       'danger',
-      'Техника',
-      'Есть недоступные ресурсы страницы',
-      'Битые CSS, JS или изображения ломают интерфейс и метрики.',
+      'Technical',
+      'Unreachable page resources found',
+      'Broken CSS, JS or images break interface and metrics.',
       resourceAudit.unreachableAssets
         .slice(0, 5)
         .map((asset) => (asset.status || 'ERR') + ' - ' + asset.url),
@@ -1063,9 +1063,9 @@ function addPerformanceInsights(
     addInsight(
       insights,
       'warning',
-      'Производительность',
-      'У статических ресурсов слабое кеширование',
-      'Для CSS/JS/изображений обычно нужен Cache-Control с долгим max-age.',
+      'Performance',
+      'Static resources have weak caching',
+      'For CSS/JS/images usually need Cache-Control with long max-age.',
       resourceAudit.cacheIssues
         .slice(0, 5)
         .map((asset) => asset.reason + ': ' + asset.url),
@@ -1074,9 +1074,9 @@ function addPerformanceInsights(
     addInsight(
       insights,
       'success',
-      'Производительность',
-      'Кеширование статических ресурсов выглядит хорошо',
-      'Проверено ресурсов: ' + resourceAudit.checkedResources + '.',
+      'Performance',
+      'Static resource caching looks good',
+      'Resources checked: ' + resourceAudit.checkedResources + '.',
     );
   }
 }
@@ -1117,9 +1117,9 @@ function addSecurityInsights(insights, headers, finalUrlObject, page, tlsAudit) 
       addInsight(
         insights,
         'warning',
-        'Безопасность',
-        'Нет заголовка ' + header.title,
-        'Этот security header снижает риск типовых атак или утечек данных.',
+        'Security',
+        'Missing header ' + header.title,
+        'This security header reduces risk of typical attacks or data leaks.',
       );
       return;
     }
@@ -1128,9 +1128,9 @@ function addSecurityInsights(insights, headers, finalUrlObject, page, tlsAudit) 
       addInsight(
         insights,
         'warning',
-        'Безопасность',
-        header.title + ' задан необычно',
-        'Ожидалось значение с "' + header.expected + '", найдено: ' + value + '.',
+        'Security',
+        header.title + ' set unusually',
+        'Expected value with "' + header.expected + '", found: ' + value + '.',
       );
       return;
     }
@@ -1138,9 +1138,9 @@ function addSecurityInsights(insights, headers, finalUrlObject, page, tlsAudit) 
     addInsight(
       insights,
       'success',
-      'Безопасность',
-      header.title + ' присутствует',
-      'Значение: ' + value + '.',
+      'Security',
+      header.title + ' present',
+      'Value: ' + value + '.',
     );
   });
 
@@ -1148,18 +1148,18 @@ function addSecurityInsights(insights, headers, finalUrlObject, page, tlsAudit) 
     addInsight(
       insights,
       'danger',
-      'Безопасность',
-      'Найден mixed content',
-      'HTTPS-страница ссылается на HTTP-ресурсы, которые браузер может заблокировать.',
+      'Security',
+      'Mixed content found',
+      'HTTPS page references HTTP resources that browser may block.',
       page.mixedContent.slice(0, 5),
     );
   } else if (finalUrlObject.protocol === 'https:') {
     addInsight(
       insights,
       'success',
-      'Безопасность',
-      'Mixed content не найден',
-      'В HTML нет явных HTTP-ресурсов для загрузки.',
+      'Security',
+      'Mixed content not found',
+      'No explicit HTTP resources for loading in HTML.',
     );
   }
 
@@ -1173,9 +1173,9 @@ function addCookieInsights(insights, headers) {
     addInsight(
       insights,
       'info',
-      'Безопасность',
-      'Set-Cookie не найден',
-      'Страница не устанавливает cookies в первом ответе.',
+      'Security',
+      'Set-Cookie not found',
+      'Page does not set cookies in first response.',
     );
     return;
   }
@@ -1184,27 +1184,27 @@ function addCookieInsights(insights, headers) {
   cookies.forEach((cookie, index) => {
     const lower = cookie.toLowerCase();
     const name = cookie.split('=')[0] || 'cookie #' + (index + 1);
-    if (!lower.includes('; secure')) issues.push(name + ': нет Secure');
-    if (!lower.includes('; httponly')) issues.push(name + ': нет HttpOnly');
-    if (!lower.includes('; samesite')) issues.push(name + ': нет SameSite');
+    if (!lower.includes('; secure')) issues.push(name + ': no Secure');
+    if (!lower.includes('; httponly')) issues.push(name + ': no HttpOnly');
+    if (!lower.includes('; samesite')) issues.push(name + ': no SameSite');
   });
 
   if (issues.length > 0) {
     addInsight(
       insights,
       'warning',
-      'Безопасность',
-      'У cookies не хватает защитных флагов',
-      'Для пользовательских сессий особенно важны Secure, HttpOnly и SameSite.',
+      'Security',
+      'Cookies missing protective flags',
+      'For user sessions especially important Secure, HttpOnly and SameSite.',
       issues.slice(0, 8),
     );
   } else {
     addInsight(
       insights,
       'success',
-      'Безопасность',
-      'Cookies защищены флагами',
-      'Все cookies из первого ответа содержат Secure, HttpOnly и SameSite.',
+      'Security',
+      'Cookies protected with flags',
+      'All cookies from first response contain Secure, HttpOnly and SameSite.',
     );
   }
 }
@@ -1218,8 +1218,8 @@ function addTlsInsights(insights, tlsAudit) {
     addInsight(
       insights,
       'warning',
-      'Безопасность',
-      'TLS-сертификат не удалось проверить',
+      'Security',
+      'TLS certificate could not be verified',
       tlsAudit.error,
     );
     return;
@@ -1229,9 +1229,9 @@ function addTlsInsights(insights, tlsAudit) {
     addInsight(
       insights,
       'danger',
-      'Безопасность',
-      'TLS-сертификат не прошёл проверку',
-      tlsAudit.authorizationError || 'Сертификат недоверенный или настроен некорректно.',
+      'Security',
+      'TLS certificate failed verification',
+      tlsAudit.authorizationError || 'Certificate untrusted or configured incorrectly.',
     );
   }
 
@@ -1239,33 +1239,33 @@ function addTlsInsights(insights, tlsAudit) {
     addInsight(
       insights,
       'danger',
-      'Безопасность',
-      'TLS-сертификат просрочен',
-      'Срок действия истёк: ' + tlsAudit.validTo + '.',
+      'Security',
+      'TLS certificate expired',
+      'Validity expired: ' + tlsAudit.validTo + '.',
     );
   } else if (tlsAudit.daysLeft < 14) {
     addInsight(
       insights,
       'danger',
-      'Безопасность',
-      'TLS-сертификат скоро истечёт',
-      'Осталось дней: ' + tlsAudit.daysLeft + '.',
+      'Security',
+      'TLS certificate expiring soon',
+      'Days left: ' + tlsAudit.daysLeft + '.',
     );
   } else if (tlsAudit.daysLeft < 30) {
     addInsight(
       insights,
       'warning',
-      'Безопасность',
-      'TLS-сертификат близок к истечению',
-      'Осталось дней: ' + tlsAudit.daysLeft + '.',
+      'Security',
+      'TLS certificate near expiration',
+      'Days left: ' + tlsAudit.daysLeft + '.',
     );
   } else {
     addInsight(
       insights,
       'success',
-      'Безопасность',
-      'TLS-сертификат актуален',
-      'До истечения примерно ' + tlsAudit.daysLeft + ' дн.',
+      'Security',
+      'TLS certificate current',
+      'Approximately ' + tlsAudit.daysLeft + ' days until expiration.',
     );
   }
 }
@@ -1275,17 +1275,17 @@ function addAccessibilityInsights(insights, page) {
     addInsight(
       insights,
       'danger',
-      'Мобильность',
-      'Нет meta viewport',
-      'На смартфонах страница может отображаться некорректно.',
+      'Mobile',
+      'No meta viewport',
+      'Page may display incorrectly on smartphones.',
     );
   } else {
     addInsight(
       insights,
       'success',
-      'Мобильность',
-      'Viewport задан',
-      'Страница содержит meta viewport.',
+      'Mobile',
+      'Viewport set',
+      'Page contains meta viewport.',
     );
   }
 
@@ -1293,17 +1293,17 @@ function addAccessibilityInsights(insights, page) {
     addInsight(
       insights,
       'warning',
-      'Брендинг',
-      'Favicon не найден',
-      'Без иконки сайт выглядит менее завершённым во вкладках и закладках.',
+      'Branding',
+      'Favicon not found',
+      'Without icon, site looks less complete in tabs and bookmarks.',
     );
   } else {
     addInsight(
       insights,
       'success',
-      'Брендинг',
-      'Favicon найден',
-      'Иконка сайта подключена.',
+      'Branding',
+      'Favicon found',
+      'Site icon connected.',
     );
   }
 
@@ -1311,19 +1311,19 @@ function addAccessibilityInsights(insights, page) {
     addInsight(
       insights,
       'info',
-      'Доступность',
-      'Полей формы не найдено',
-      'Проверка label не применялась.',
+      'Accessibility',
+      'No form fields found',
+      'Label check not applied.',
     );
   } else if (page.formsAudit.missingLabels.length > 0) {
     addInsight(
       insights,
       'warning',
-      'Доступность',
-      'У полей формы нет label',
-      'Label помогает пользователям скринридеров и увеличивает область клика.',
+      'Accessibility',
+      'Form fields missing label',
+      'Label helps screen reader users and increases click area.',
       [
-        'Без label: ' +
+        'Missing label: ' +
           page.formsAudit.missingLabels.length +
           ' / ' +
           page.formsAudit.total,
@@ -1333,9 +1333,9 @@ function addAccessibilityInsights(insights, page) {
     addInsight(
       insights,
       'success',
-      'Доступность',
-      'Поля формы подписаны',
-      'У всех проверенных полей есть label или aria-метка.',
+      'Accessibility',
+      'Form fields labeled',
+      'All checked fields have label or aria-label.',
     );
   }
 
@@ -1346,21 +1346,21 @@ function addAccessibilityInsights(insights, page) {
     addInsight(
       insights,
       'warning',
-      'Доступность',
-      'Есть ссылки или кнопки без понятного текста',
-      'Интерактивным элементам нужен текст, aria-label или title.',
+      'Accessibility',
+      'Links or buttons without clear text',
+      'Interactive elements need text, aria-label or title.',
       [
-        'Пустые ссылки: ' + page.interactiveTextAudit.emptyLinks.length,
-        'Пустые кнопки: ' + page.interactiveTextAudit.emptyButtons.length,
+        'Empty links: ' + page.interactiveTextAudit.emptyLinks.length,
+        'Empty buttons: ' + page.interactiveTextAudit.emptyButtons.length,
       ],
     );
   } else {
     addInsight(
       insights,
       'success',
-      'Доступность',
-      'Текст ссылок и кнопок читаемый',
-      'Пустых интерактивных элементов не найдено.',
+      'Accessibility',
+      'Link and button text readable',
+      'No empty interactive elements found.',
     );
   }
 
@@ -1368,9 +1368,9 @@ function addAccessibilityInsights(insights, page) {
     addInsight(
       insights,
       'warning',
-      'Доступность',
-      'Найден потенциально низкий контраст',
-      'Статическая проверка inline/style CSS нашла пары цветов ниже WCAG 4.5:1.',
+      'Accessibility',
+      'Potentially low contrast found',
+      'Static check of inline/style CSS found color pairs below WCAG 4.5:1.',
       page.contrastAudit.lowContrast
         .slice(0, 5)
         .map((item) => item.ratio + ': ' + item.sample),
@@ -1379,11 +1379,11 @@ function addAccessibilityInsights(insights, page) {
     addInsight(
       insights,
       page.contrastAudit.checked > 0 ? 'success' : 'info',
-      'Доступность',
-      'Критичных проблем контраста не найдено',
+      'Accessibility',
+      'No critical contrast issues found',
       page.contrastAudit.checked > 0
-        ? 'Проверено цветовых пар: ' + page.contrastAudit.checked + '.'
-        : 'На странице не найдено явных inline/style пар color + background.',
+        ? 'Color pairs checked: ' + page.contrastAudit.checked + '.'
+        : 'No explicit inline/style color + background pairs found on page.',
     );
   }
 }
@@ -1393,9 +1393,9 @@ function addLinkInsights(insights, linkAudit) {
     addInsight(
       insights,
       'info',
-      'Ссылки',
-      'Ссылок для проверки не найдено',
-      'На странице нет HTTP/HTTPS ссылок.',
+      'Links',
+      'No links to check found',
+      'Page has no HTTP/HTTPS links.',
     );
     return;
   }
@@ -1404,9 +1404,9 @@ function addLinkInsights(insights, linkAudit) {
     addInsight(
       insights,
       'danger',
-      'Ссылки',
-      'Найдены битые ссылки',
-      'Такие ссылки ухудшают пользовательский опыт и расходуют crawl budget.',
+      'Links',
+      'Broken links found',
+      'Such links worsen user experience and waste crawl budget.',
       linkAudit.broken
         .slice(0, 8)
         .map((link) => (link.status || 'ERR') + ' - ' + link.url),
@@ -1415,9 +1415,9 @@ function addLinkInsights(insights, linkAudit) {
     addInsight(
       insights,
       'success',
-      'Ссылки',
-      'Битые ссылки не найдены',
-      'Проверено ссылок: ' + linkAudit.checked + '.',
+      'Links',
+      'No broken links found',
+      'Links checked: ' + linkAudit.checked + '.',
     );
   }
 
@@ -1425,13 +1425,13 @@ function addLinkInsights(insights, linkAudit) {
     addInsight(
       insights,
       'info',
-      'Ссылки',
-      'Проверена выборка ссылок',
-      'Чтобы аудит не зависал, проверены первые ' +
+      'Links',
+      'Link sample checked',
+      'To prevent audit hanging, checked first ' +
         linkAudit.checked +
-        ' из ' +
+        ' of ' +
         linkAudit.total +
-        ' уникальных ссылок.',
+        ' unique links.',
     );
   }
 }
@@ -1441,16 +1441,16 @@ function addInternationalInsights(insights, page) {
     addInsight(
       insights,
       'warning',
-      'Доступность',
-      'Не указан lang у html',
-      'Атрибут lang помогает браузерам, переводчикам и скринридерам.',
+      'Accessibility',
+      'HTML lang not specified',
+      'Lang attribute helps browsers, translators and screen readers.',
     );
   } else {
     addInsight(
       insights,
       'success',
-      'Доступность',
-      'Язык страницы указан',
+      'Accessibility',
+      'Page language specified',
       'html lang="' + page.htmlLang + '".',
     );
   }
@@ -1459,17 +1459,17 @@ function addInternationalInsights(insights, page) {
     addInsight(
       insights,
       'warning',
-      'Техника',
-      'Не указан charset',
-      'Добавьте meta charset, чтобы избежать проблем с кодировкой.',
+      'Technical',
+      'Charset not specified',
+      'Add meta charset to avoid encoding issues.',
     );
   } else {
     addInsight(
       insights,
       'success',
-      'Техника',
-      'Charset указан',
-      'Кодировка: ' + page.charset + '.',
+      'Technical',
+      'Charset specified',
+      'Encoding: ' + page.charset + '.',
     );
   }
 
@@ -1481,16 +1481,16 @@ function addInternationalInsights(insights, page) {
       insights,
       'info',
       'SEO',
-      'hreflang не найден',
-      'Это нормально для одноязычного сайта. Для мультиязычных версий теги нужны.',
+      'hreflang not found',
+      'Normal for single-language site. For multilingual versions, tags needed.',
     );
   } else if (invalidHreflang.length > 0) {
     addInsight(
       insights,
       'warning',
       'SEO',
-      'Есть ошибки в hreflang',
-      'Проверьте языковые коды и href у альтернативных страниц.',
+      'hreflang errors found',
+      'Check language codes and href of alternative pages.',
       invalidHreflang
         .slice(0, 5)
         .map((tag) => tag.hreflang + ' -> ' + tag.href),
@@ -1500,8 +1500,8 @@ function addInternationalInsights(insights, page) {
       insights,
       'success',
       'SEO',
-      'hreflang выглядит корректно',
-      'Найдено альтернативных языковых версий: ' + page.hreflangTags.length + '.',
+      'hreflang looks correct',
+      'Alternative language versions found: ' + page.hreflangTags.length + '.',
     );
   }
 }
@@ -1564,19 +1564,19 @@ async function auditResources(page) {
     .map((resource) => {
       const cacheControl = getHeader(resource.headers, 'cache-control');
       if (!cacheControl) {
-        return { url: resource.url, reason: 'Нет Cache-Control' };
+        return { url: resource.url, reason: 'No Cache-Control' };
       }
 
       const seconds = getMaxAgeSeconds(cacheControl);
       if (seconds !== null && seconds < GOOD_CACHE_SECONDS) {
         return {
           url: resource.url,
-          reason: 'max-age меньше 7 дней',
+          reason: 'max-age less than 7 days',
         };
       }
 
       if (/no-store|no-cache/i.test(cacheControl)) {
-        return { url: resource.url, reason: 'Отключено кеширование' };
+        return { url: resource.url, reason: 'Caching disabled' };
       }
 
       return null;
@@ -1708,7 +1708,7 @@ async function inspectUrl(url, accept) {
       ok: false,
       status: null,
       headers: {},
-      error: 'Некорректный URL',
+      error: 'Invalid URL',
     };
   }
 
@@ -1811,7 +1811,7 @@ function getTlsCertificateInfo(finalUrl) {
 
         if (!cert || !cert.valid_to) {
           resolve({
-            error: 'Сервер не вернул данные сертификата.',
+            error: 'Server did not return certificate data.',
           });
           return;
         }
@@ -1832,7 +1832,7 @@ function getTlsCertificateInfo(finalUrl) {
 
     socket.setTimeout(RESOURCE_TIMEOUT_MS, () => {
       socket.destroy();
-      resolve({ error: 'Таймаут проверки TLS-сертификата.' });
+      resolve({ error: 'TLS certificate check timeout.' });
     });
 
     socket.on('error', (error) => {
@@ -2033,7 +2033,7 @@ function parseJsonLd(content) {
   if (!content) {
     return {
       valid: false,
-      error: 'Пустой JSON-LD блок.',
+      error: 'Empty JSON-LD block.',
     };
   }
 
@@ -2065,7 +2065,7 @@ function buildRawData({
     finalUrl,
     redirects,
     loadTime,
-    contentType: getHeader(response.headers, 'content-type') || 'Не указан',
+    contentType: getHeader(response.headers, 'content-type') || 'Not specified',
     title: page.title,
     description: page.description,
     h1: page.h1.map((heading) => heading.text),
@@ -2259,9 +2259,6 @@ function isGenericTitle(title) {
     'untitled',
     'document',
     'welcome',
-    'главная',
-    'главная страница',
-    'добро пожаловать',
   ].includes(normalized);
 }
 
@@ -2394,7 +2391,7 @@ function simplifyError(error) {
   if (error.code) {
     return error.code;
   }
-  return error.message || 'Неизвестная ошибка';
+  return error.message || 'Unknown error';
 }
 
 async function mapLimit(items, limit, mapper) {

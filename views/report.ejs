@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Отчёт аудита: <%= targetUrl %></title>
+    <title>Audit Report: <%= targetUrl %></title>
     <link rel="stylesheet" href="/styles.css">
 </head>
 <body class="min-h-screen bg-zinc-950 text-zinc-100 antialiased">
@@ -16,9 +16,9 @@
         };
         const levelLabels = {
             success: 'OK',
-            warning: 'Внимание',
-            danger: 'Критично',
-            info: 'Инфо'
+            warning: 'Warning',
+            danger: 'Critical',
+            info: 'Info'
         };
         const levelDots = {
             success: 'bg-emerald-300',
@@ -33,26 +33,26 @@
     <main class="mx-auto w-full max-w-7xl px-5 py-8 sm:px-8">
         <header class="mb-6 flex flex-col gap-4 border-b border-zinc-800 pb-6 lg:flex-row lg:items-end lg:justify-between">
             <div>
-                <a href="/" class="text-sm font-medium text-cyan-300 transition hover:text-cyan-200">← Новый аудит</a>
-                <h1 class="mt-3 text-3xl font-semibold text-white sm:text-4xl">Результаты аудита</h1>
+                <a href="/" class="text-sm font-medium text-cyan-300 transition hover:text-cyan-200">← New Audit</a>
+                <h1 class="mt-3 text-3xl font-semibold text-white sm:text-4xl">Audit Results</h1>
                 <p class="mt-3 max-w-4xl break-all text-sm text-zinc-300">
-                    <span class="text-zinc-500">Проверенный URL:</span>
+                    <span class="text-zinc-500">Checked URL:</span>
                     <a href="<%= finalUrl %>" target="_blank" class="text-cyan-300 hover:text-cyan-200"><%= finalUrl %></a>
                 </p>
             </div>
             <div class="rounded-lg border border-zinc-800 bg-zinc-900 px-5 py-4">
-                <p class="text-sm text-zinc-400">Итоговый балл</p>
+                <p class="text-sm text-zinc-400">Overall Score</p>
                 <p class="mt-1 text-4xl font-semibold text-white"><%= summary.score %><span class="text-base text-zinc-500">/100</span></p>
             </div>
         </header>
 
         <section class="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
             <div class="rounded-lg border border-zinc-800 bg-zinc-900 p-4">
-                <p class="text-sm text-zinc-400">Критично</p>
+                <p class="text-sm text-zinc-400">Critical</p>
                 <p class="mt-1 text-2xl font-semibold text-red-200"><%= summary.danger %></p>
             </div>
             <div class="rounded-lg border border-zinc-800 bg-zinc-900 p-4">
-                <p class="text-sm text-zinc-400">Внимание</p>
+                <p class="text-sm text-zinc-400">Warning</p>
                 <p class="mt-1 text-2xl font-semibold text-amber-200"><%= summary.warning %></p>
             </div>
             <div class="rounded-lg border border-zinc-800 bg-zinc-900 p-4">
@@ -60,11 +60,11 @@
                 <p class="mt-1 text-2xl font-semibold text-emerald-200"><%= summary.success %></p>
             </div>
             <div class="rounded-lg border border-zinc-800 bg-zinc-900 p-4">
-                <p class="text-sm text-zinc-400">Время ответа</p>
-                <p class="mt-1 text-2xl font-semibold text-white"><%= loadTime %> мс</p>
+                <p class="text-sm text-zinc-400">Response Time</p>
+                <p class="mt-1 text-2xl font-semibold text-white"><%= loadTime %> ms</p>
             </div>
             <div class="rounded-lg border border-zinc-800 bg-zinc-900 p-4">
-                <p class="text-sm text-zinc-400">Проверено</p>
+                <p class="text-sm text-zinc-400">Checked</p>
                 <p class="mt-1 text-sm font-medium text-zinc-200"><%= checkedAt %></p>
             </div>
         </section>
@@ -73,40 +73,40 @@
             <article class="rounded-lg border border-zinc-800 bg-zinc-900 p-5">
                 <div class="flex items-center justify-between gap-3">
                     <h2 class="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Title</h2>
-                    <span class="rounded-full border border-zinc-700 px-2.5 py-1 text-xs text-zinc-300"><%= titleLength %> симв.</span>
+                    <span class="rounded-full border border-zinc-700 px-2.5 py-1 text-xs text-zinc-300"><%= titleLength %> chars</span>
                 </div>
-                <p class="mt-3 break-words text-base leading-7 text-white"><%= raw.title || 'Title отсутствует' %></p>
+                <p class="mt-3 break-words text-base leading-7 text-white"><%= raw.title || 'Title missing' %></p>
             </article>
 
             <article class="rounded-lg border border-zinc-800 bg-zinc-900 p-5">
                 <div class="flex items-center justify-between gap-3">
                     <h2 class="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Meta description</h2>
-                    <span class="rounded-full border border-zinc-700 px-2.5 py-1 text-xs text-zinc-300"><%= descriptionLength %> симв.</span>
+                    <span class="rounded-full border border-zinc-700 px-2.5 py-1 text-xs text-zinc-300"><%= descriptionLength %> chars</span>
                 </div>
-                <p class="mt-3 break-words text-base leading-7 text-white"><%= raw.description || 'Meta description отсутствует' %></p>
+                <p class="mt-3 break-words text-base leading-7 text-white"><%= raw.description || 'Meta description missing' %></p>
             </article>
         </section>
 
         <section class="mb-8 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             <div class="rounded-lg border border-zinc-800 bg-zinc-900 p-4">
-                <p class="text-sm text-zinc-400">Ссылки</p>
+                <p class="text-sm text-zinc-400">Links</p>
                 <p class="mt-1 text-xl font-semibold text-white"><%= raw.internalLinks %> / <%= raw.externalLinks %></p>
-                <p class="mt-1 text-xs text-zinc-500">внутренние / внешние</p>
+                <p class="mt-1 text-xs text-zinc-500">internal / external</p>
             </div>
             <div class="rounded-lg border border-zinc-800 bg-zinc-900 p-4">
-                <p class="text-sm text-zinc-400">Картинки без alt</p>
+                <p class="text-sm text-zinc-400">Images without alt</p>
                 <p class="mt-1 text-xl font-semibold text-white"><%= raw.imagesWithoutAlt %> + <%= raw.imagesWithEmptyAlt %></p>
-                <p class="mt-1 text-xs text-zinc-500">отсутствует + пустой</p>
+                <p class="mt-1 text-xs text-zinc-500">missing + empty</p>
             </div>
             <div class="rounded-lg border border-zinc-800 bg-zinc-900 p-4">
                 <p class="text-sm text-zinc-400">JS / CSS</p>
                 <p class="mt-1 text-xl font-semibold text-white"><%= raw.scripts %> / <%= raw.stylesheets %></p>
-                <p class="mt-1 text-xs text-zinc-500">внешние файлы</p>
+                <p class="mt-1 text-xs text-zinc-500">external files</p>
             </div>
             <div class="rounded-lg border border-zinc-800 bg-zinc-900 p-4">
-                <p class="text-sm text-zinc-400">HTML / текст</p>
+                <p class="text-sm text-zinc-400">HTML / text</p>
                 <p class="mt-1 text-xl font-semibold text-white"><%= raw.htmlSize %> / <%= raw.wordCount %></p>
-                <p class="mt-1 text-xs text-zinc-500">размер / слов</p>
+                <p class="mt-1 text-xs text-zinc-500">size / words</p>
             </div>
         </section>
 
@@ -140,10 +140,10 @@
 
             <aside class="space-y-3">
                 <div class="rounded-lg border border-zinc-800 bg-zinc-900 p-4">
-                    <h2 class="text-sm font-semibold text-white">Сырые данные</h2>
+                    <h2 class="text-sm font-semibold text-white">Raw Data</h2>
                     <dl class="mt-3 space-y-2 text-sm">
                         <div class="flex justify-between gap-3">
-                            <dt class="text-zinc-500">HTTP статус</dt>
+                            <dt class="text-zinc-500">HTTP Status</dt>
                             <dd class="text-right text-zinc-200"><%= raw.status %></dd>
                         </div>
                         <div class="flex justify-between gap-3">
@@ -151,20 +151,20 @@
                             <dd class="text-right text-zinc-200"><%= raw.contentType %></dd>
                         </div>
                         <div class="flex justify-between gap-3">
-                            <dt class="text-zinc-500">Редиректы</dt>
+                            <dt class="text-zinc-500">Redirects</dt>
                             <dd class="text-right text-zinc-200"><%= raw.redirects.length %></dd>
                         </div>
                         <div class="flex justify-between gap-3">
                             <dt class="text-zinc-500">Canonical</dt>
-                            <dd class="max-w-48 break-all text-right text-zinc-200"><%= raw.canonical || 'Нет' %></dd>
+                            <dd class="max-w-48 break-all text-right text-zinc-200"><%= raw.canonical || 'None' %></dd>
                         </div>
                         <div class="flex justify-between gap-3">
                             <dt class="text-zinc-500">Robots meta</dt>
-                            <dd class="max-w-48 break-all text-right text-zinc-200"><%= raw.robots || 'Нет' %></dd>
+                            <dd class="max-w-48 break-all text-right text-zinc-200"><%= raw.robots || 'None' %></dd>
                         </div>
                         <div class="flex justify-between gap-3">
                             <dt class="text-zinc-500">Sitemap</dt>
-                            <dd class="text-right text-zinc-200"><%= raw.sitemap.exists ? 'Найден' : 'Нет' %></dd>
+                            <dd class="text-right text-zinc-200"><%= raw.sitemap.exists ? 'Found' : 'None' %></dd>
                         </div>
                         <div class="flex justify-between gap-3">
                             <dt class="text-zinc-500">JSON-LD</dt>
@@ -175,19 +175,19 @@
                             <dd class="text-right text-zinc-200"><%= raw.hreflang %></dd>
                         </div>
                         <div class="flex justify-between gap-3">
-                            <dt class="text-zinc-500">Сжатие</dt>
-                            <dd class="text-right text-zinc-200"><%= raw.compression || 'Нет' %></dd>
+                            <dt class="text-zinc-500">Compression</dt>
+                            <dd class="text-right text-zinc-200"><%= raw.compression || 'None' %></dd>
                         </div>
                     </dl>
                 </div>
 
                 <div class="rounded-lg border border-zinc-800 bg-zinc-900 p-4">
                     <h2 class="text-sm font-semibold text-white">Title</h2>
-                    <p class="mt-2 break-words text-sm leading-6 text-zinc-300"><%= raw.title || 'Нет' %></p>
+                    <p class="mt-2 break-words text-sm leading-6 text-zinc-300"><%= raw.title || 'None' %></p>
                     <h2 class="mt-4 text-sm font-semibold text-white">Meta description</h2>
-                    <p class="mt-2 break-words text-sm leading-6 text-zinc-300"><%= raw.description || 'Нет' %></p>
+                    <p class="mt-2 break-words text-sm leading-6 text-zinc-300"><%= raw.description || 'None' %></p>
                     <h2 class="mt-4 text-sm font-semibold text-white">H1</h2>
-                    <p class="mt-2 break-words text-sm leading-6 text-zinc-300"><%= raw.h1.length ? raw.h1.join(' | ') : 'Нет' %></p>
+                    <p class="mt-2 break-words text-sm leading-6 text-zinc-300"><%= raw.h1.length ? raw.h1.join(' | ') : 'None' %></p>
                 </div>
             </aside>
         </section>
