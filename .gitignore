@@ -5,3 +5,6 @@ node_modules/
 .env.local
 dist/
 .cache/
+
+# Local Netlify folder
+.netlify

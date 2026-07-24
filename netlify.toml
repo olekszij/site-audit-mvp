@@ -4,16 +4,9 @@
 
 [functions]
   node_bundler = "esbuild"
-  included_files = ["views/**"]
-  external_node_modules = [
-    "axios",
-    "cheerio",
-    "ejs",
-    "express",
-    "serverless-http"
-  ]
+  included_files = ["views/**", "audit.js"]
 
 [[redirects]]
-  from = "/*"
-  to = "/.netlify/functions/app/:splat"
+  from = "/audit"
+  to = "/.netlify/functions/app"
   status = 200
