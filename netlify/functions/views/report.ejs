@@ -26,11 +26,32 @@
             danger: 'bg-red-300',
             info: 'bg-sky-300'
         };
+        const categoryIcons = {
+            'SEO': '🔍',
+            'Performance': '⚡',
+            'Security': '🔒',
+            'Accessibility': '♿',
+            'Technical': '⚙️',
+            'Indexing': '📊',
+            'Social': '📱',
+            'Content': '📝',
+            'Media': '🖼️'
+        };
         const titleLength = raw.title ? raw.title.length : 0;
         const descriptionLength = raw.description ? raw.description.length : 0;
+        
+        // Group insights by category
+        const insightsByCategory = {};
+        insights.forEach(item => {
+            if (!insightsByCategory[item.category]) {
+                insightsByCategory[item.category] = [];
+            }
+            insightsByCategory[item.category].push(item);
+        });
     %>
 
     <main class="mx-auto w-full max-w-7xl px-5 py-8 sm:px-8">
+        <!-- Header Section -->
         <header class="mb-6 flex flex-col gap-4 border-b border-zinc-800 pb-6 lg:flex-row lg:items-end lg:justify-between">
             <div>
                 <a href="/" class="text-sm font-medium text-cyan-300 transition hover:text-cyan-200">← New Audit</a>
@@ -40,12 +61,18 @@
                     <a href="<%= finalUrl %>" target="_blank" class="text-cyan-300 hover:text-cyan-200"><%= finalUrl %></a>
                 </p>
             </div>
-            <div class="rounded-lg border border-zinc-800 bg-zinc-900 px-5 py-4">
-                <p class="text-sm text-zinc-400">Overall Score</p>
-                <p class="mt-1 text-4xl font-semibold text-white"><%= summary.score %><span class="text-base text-zinc-500">/100</span></p>
+            <div class="flex gap-3">
+                <div class="rounded-lg border border-zinc-800 bg-zinc-900 px-5 py-4">
+                    <p class="text-sm text-zinc-400">Overall Score</p>
+                    <p class="mt-1 text-4xl font-semibold text-white"><%= summary.score %><span class="text-base text-zinc-500">/100</span></p>
+                </div>
+                <button onclick="exportReport()" class="rounded-lg border border-zinc-800 bg-zinc-900 px-5 py-4 text-sm font-medium text-cyan-300 transition hover:bg-zinc-800">
+                    📥 Export
+                </button>
             </div>
         </header>
 
+        <!-- Quick Stats -->
         <section class="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
             <div class="rounded-lg border border-zinc-800 bg-zinc-900 p-4">
                 <p class="text-sm text-zinc-400">Critical</p>
@@ -69,6 +96,19 @@
             </div>
         </section>
 
+        <!-- Category Filter Tabs -->
+        <section class="mb-6 flex flex-wrap gap-2 border-b border-zinc-800 pb-4">
+            <button onclick="filterCategory('all')" class="category-tab active rounded-full border border-zinc-700 bg-zinc-900 px-4 py-2 text-sm font-medium text-zinc-200 transition hover:bg-zinc-800" data-category="all">
+                All Issues
+            </button>
+            <% Object.keys(insightsByCategory).forEach(category => { %>
+                <button onclick="filterCategory('<%= category %>')" class="category-tab rounded-full border border-zinc-700 bg-zinc-900 px-4 py-2 text-sm font-medium text-zinc-200 transition hover:bg-zinc-800" data-category="<%= category %>">
+                    <%= categoryIcons[category] || '📋' %> <%= category %> (<%= insightsByCategory[category].length %>)
+                </button>
+            <% }) %>
+        </section>
+
+        <!-- SEO Basics -->
         <section class="mb-8 grid gap-4 lg:grid-cols-2">
             <article class="rounded-lg border border-zinc-800 bg-zinc-900 p-5">
                 <div class="flex items-center justify-between gap-3">
@@ -87,6 +127,7 @@
             </article>
         </section>
 
+        <!-- Technical Metrics -->
         <section class="mb-8 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             <div class="rounded-lg border border-zinc-800 bg-zinc-900 p-4">
                 <p class="text-sm text-zinc-400">Links</p>
@@ -110,34 +151,56 @@
             </div>
         </section>
 
+        <!-- Main Content with Categorized Insights -->
         <section class="grid gap-4 xl:grid-cols-[1fr_360px]">
-            <div class="space-y-3">
-                <% insights.forEach(item => { %>
-                    <article class="rounded-lg border p-4 <%= levelStyles[item.level] %>">
-                        <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                            <div>
-                                <div class="mb-2 flex flex-wrap items-center gap-2">
-                                    <span class="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-xs font-semibold">
-                                        <span class="h-2 w-2 rounded-full <%= levelDots[item.level] %>"></span>
-                                        <%= levelLabels[item.level] %>
-                                    </span>
-                                    <span class="rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-xs font-medium text-zinc-200"><%= item.category %></span>
+            <div class="space-y-4">
+                <% Object.keys(insightsByCategory).forEach(category => { %>
+                    <div class="category-section rounded-lg border border-zinc-800 bg-zinc-900" data-category="<%= category %>">
+                        <button onclick="toggleCategory('<%= category %>')" class="w-full flex items-center justify-between p-4 text-left transition hover:bg-zinc-800/50">
+                            <div class="flex items-center gap-3">
+                                <span class="text-2xl"><%= categoryIcons[category] || '📋' %></span>
+                                <div>
+                                    <h2 class="text-lg font-semibold text-white"><%= category %></h2>
+                                    <p class="text-sm text-zinc-400"><%= insightsByCategory[category].length %> issues found</p>
                                 </div>
-                                <h2 class="text-base font-semibold text-white"><%= item.title %></h2>
-                                <p class="mt-1 text-sm leading-6 text-zinc-200"><%= item.text %></p>
                             </div>
+                            <svg class="h-5 w-5 transform transition-transform" id="icon-<%= category %>" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                            </svg>
+                        </button>
+                        <div class="insights-container space-y-3 p-4 pt-0" id="container-<%= category %>">
+                            <% insightsByCategory[category].forEach(item => { %>
+                                <article class="rounded-lg border p-4 <%= levelStyles[item.level] %> insight-item" data-level="<%= item.level %>">
+                                    <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                                        <div>
+                                            <div class="mb-2 flex flex-wrap items-center gap-2">
+                                                <span class="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-xs font-semibold">
+                                                    <span class="h-2 w-2 rounded-full <%= levelDots[item.level] %>"></span>
+                                                    <%= levelLabels[item.level] %>
+                                                </span>
+                                            </div>
+                                            <h2 class="text-base font-semibold text-white"><%= item.title %></h2>
+                                            <p class="mt-1 text-sm leading-6 text-zinc-200"><%= item.text %></p>
+                                        </div>
+                                    </div>
+                                    <% if (item.details && item.details.length) { %>
+                                        <button onclick="toggleDetails(this)" class="mt-2 text-xs text-cyan-300 hover:text-cyan-200">
+                                            Show details ▼
+                                        </button>
+                                        <ul class="details-list hidden mt-3 space-y-1 border-t border-white/10 pt-3 text-xs leading-5 text-zinc-300">
+                                            <% item.details.forEach(detail => { %>
+                                                <li class="break-all"><%= detail %></li>
+                                            <% }) %>
+                                        </ul>
+                                    <% } %>
+                                </article>
+                            <% }) %>
                         </div>
-                        <% if (item.details && item.details.length) { %>
-                            <ul class="mt-3 space-y-1 border-t border-white/10 pt-3 text-xs leading-5 text-zinc-300">
-                                <% item.details.forEach(detail => { %>
-                                    <li class="break-all"><%= detail %></li>
-                                <% }) %>
-                            </ul>
-                        <% } %>
-                    </article>
+                    </div>
                 <% }) %>
             </div>
 
+            <!-- Sidebar -->
             <aside class="space-y-3">
                 <div class="rounded-lg border border-zinc-800 bg-zinc-900 p-4">
                     <h2 class="text-sm font-semibold text-white">Raw Data</h2>
@@ -192,5 +255,89 @@
             </aside>
         </section>
     </main>
+
+    <script>
+        // Toggle category expansion
+        function toggleCategory(category) {
+            const container = document.getElementById('container-' + category);
+            const icon = document.getElementById('icon-' + category);
+            
+            if (container.classList.contains('hidden')) {
+                container.classList.remove('hidden');
+                icon.classList.remove('rotate-180');
+            } else {
+                container.classList.add('hidden');
+                icon.classList.add('rotate-180');
+            }
+        }
+
+        // Filter by category
+        function filterCategory(category) {
+            const tabs = document.querySelectorAll('.category-tab');
+            tabs.forEach(tab => {
+                tab.classList.remove('active', 'bg-cyan-600', 'text-white');
+                tab.classList.add('bg-zinc-900', 'text-zinc-200');
+            });
+            
+            const activeTab = document.querySelector(`[data-category="${category}"]`);
+            activeTab.classList.remove('bg-zinc-900', 'text-zinc-200');
+            activeTab.classList.add('active', 'bg-cyan-600', 'text-white');
+
+            const sections = document.querySelectorAll('.category-section');
+            sections.forEach(section => {
+                if (category === 'all' || section.dataset.category === category) {
+                    section.classList.remove('hidden');
+                } else {
+                    section.classList.add('hidden');
+                }
+            });
+        }
+
+        // Toggle details visibility
+        function toggleDetails(button) {
+            const detailsList = button.nextElementSibling;
+            if (detailsList.classList.contains('hidden')) {
+                detailsList.classList.remove('hidden');
+                button.textContent = 'Hide details ▲';
+            } else {
+                detailsList.classList.add('hidden');
+                button.textContent = 'Show details ▼';
+            }
+        }
+
+        // Export report functionality
+        function exportReport() {
+            const reportData = {
+                targetUrl: '<%= targetUrl %>',
+                finalUrl: '<%= finalUrl %>',
+                checkedAt: '<%= checkedAt %>',
+                loadTime: <%= loadTime %>,
+                summary: <%- JSON.stringify(summary) %>,
+                insights: <%- JSON.stringify(insights) %>,
+                raw: <%- JSON.stringify(raw) %>
+            };
+
+            const dataStr = JSON.stringify(reportData, null, 2);
+            const dataBlob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(dataBlob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `audit-report-${new Date().toISOString().split('T')[0]}.json`;
+            link.click();
+            URL.revokeObjectURL(url);
+        }
+
+        // Initialize: collapse all categories except the first one
+        document.addEventListener('DOMContentLoaded', function() {
+            const containers = document.querySelectorAll('.insights-container');
+            containers.forEach((container, index) => {
+                if (index > 0) {
+                    container.classList.add('hidden');
+                    const icon = container.previousElementSibling.querySelector('svg');
+                    icon.classList.add('rotate-180');
+                }
+            });
+        });
+    </script>
 </body>
 </html>
