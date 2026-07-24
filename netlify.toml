@@ -4,7 +4,7 @@
 
 [functions]
   node_bundler = "esbuild"
-  included_files = ["views/**", "audit.js"]
+  included_files = ["netlify/functions/views/**", "netlify/functions/audit.js"]
   external_node_modules = [
     "axios",
     "cheerio",

@@ -7,7 +7,13 @@ const app = express();
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 app.set('view engine', 'ejs');
-app.set('views', path.join(__dirname, 'views'));
+
+// Set views path - handle both local and Netlify environments
+// In Netlify functions, __dirname points to netlify/functions/
+const viewsPath = path.join(__dirname, 'views');
+app.set('views', viewsPath);
+console.log('Views directory:', viewsPath);
+console.log('Current directory:', __dirname);
 
 app.get('/', (req, res) => {
   res.render('index', { error: null, url: '' });

@@ -1,0 +1,2435 @@
+const axios = require('axios');
+const cheerio = require('cheerio');
+const tls = require('tls');
+
+const USER_AGENT =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) SiteAuditBot/3.0';
+const REQUEST_TIMEOUT_MS = 10000;
+const RESOURCE_TIMEOUT_MS = 6000;
+const MAX_REDIRECTS = 5;
+const MAX_LINK_CHECKS = 50;
+const MAX_RESOURCE_CHECKS = 60;
+const MAX_IMAGE_HEAD_CHECKS = 35;
+const CONCURRENCY = 6;
+const HEAVY_IMAGE_BYTES = 500 * 1024;
+const GOOD_CACHE_SECONDS = 7 * 24 * 60 * 60;
+
+function normalizeUrl(value) {
+  if (!value || typeof value !== 'string') {
+    throw new Error('Enter URL to check.');
+  }
+
+  const trimmed = value.trim();
+  const withProtocol = /^[a-z][a-z\d+.-]*:\/\//i.test(trimmed)
+    ? trimmed
+    : 'https://' + trimmed;
+  const parsed = new URL(withProtocol);
+
+  if (!['http:', 'https:'].includes(parsed.protocol)) {
+    throw new Error('Only HTTP and HTTPS addresses are supported.');
+  }
+
+  parsed.hash = '';
+  return parsed.href;
+}
+
+async function runAudit(targetUrl) {
+  const fetchResult = await fetchHtmlWithRedirects(targetUrl);
+  const html =
+    typeof fetchResult.response.data === 'string'
+      ? fetchResult.response.data
+      : String(fetchResult.response.data || '');
+  const $ = cheerio.load(html);
+  const page = collectPageData($, fetchResult.finalUrl, html);
+
+  const [
+    robotsAudit,
+    canonicalAudit,
+    ogImageAudit,
+    linkAudit,
+    resourceAudit,
+    compressionAudit,
+    tlsAudit,
+  ] = await Promise.all([
+    checkRobotsAndSitemap(fetchResult.finalUrl),
+    page.canonical
+      ? inspectCanonical(page.canonical, fetchResult.finalUrl)
+      : Promise.resolve(null),
+    page.ogImage
+      ? inspectUrl(page.ogImage.absoluteUrl, 'image/*,*/*')
+      : Promise.resolve(null),
+    auditLinks(page.links),
+    auditResources(page),
+    checkCompression(fetchResult.finalUrl),
+    getTlsCertificateInfo(fetchResult.finalUrl),
+  ]);
+
+  const context = {
+    targetUrl,
+    ...fetchResult,
+    html,
+    page,
+    robotsAudit,
+    canonicalAudit,
+    ogImageAudit,
+    linkAudit,
+    resourceAudit,
+    compressionAudit,
+    tlsAudit,
+  };
+  const insights = buildInsights(context);
+
+  return {
+    targetUrl,
+    finalUrl: fetchResult.finalUrl,
+    checkedAt: new Date().toLocaleString('en-US'),
+    loadTime: fetchResult.loadTime,
+    insights,
+    summary: buildSummary(insights),
+    raw: buildRawData(context),
+  };
+}
+
+async function fetchHtmlWithRedirects(startUrl) {
+  let currentUrl = normalizeUrl(startUrl);
+  const redirects = [];
+  const startedAt = Date.now();
+
+  for (let step = 0; step <= MAX_REDIRECTS; step += 1) {
+    const response = await axios.get(currentUrl, {
+      headers: {
+        'User-Agent': USER_AGENT,
+        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      },
+      maxRedirects: 0,
+      responseType: 'text',
+      timeout: REQUEST_TIMEOUT_MS,
+      transformResponse: [(data) => data],
+      validateStatus: () => true,
+    });
+
+    const location = getHeader(response.headers, 'location');
+    if (isRedirect(response.status) && location) {
+      const nextUrl = new URL(location, currentUrl).href;
+      redirects.push({
+        status: response.status,
+        from: currentUrl,
+        to: nextUrl,
+      });
+      currentUrl = nextUrl;
+      continue;
+    }
+
+    return {
+      response,
+      finalUrl: currentUrl,
+      redirects,
+      loadTime: Date.now() - startedAt,
+    };
+  }
+
+  throw new Error('Redirect chain too long.');
+}
+
+function collectPageData($, baseUrl, html) {
+  const title = cleanText($('title').first().text()) || null;
+  const description =
+    $('meta[name="description"]').first().attr('content')?.trim() || null;
+  const viewport = $('meta[name="viewport"]').first().attr('content') || null;
+  const canonical = $('link[rel="canonical"]').first().attr('href') || null;
+  const robots = $('meta[name="robots"]').first().attr('content') || null;
+  const htmlLang = $('html').first().attr('lang') || null;
+  const charset =
+    $('meta[charset]').first().attr('charset') ||
+    $('meta[http-equiv="content-type"]').first().attr('content') ||
+    null;
+  const favicon =
+    $('link[rel="icon"], link[rel="shortcut icon"], link[rel="apple-touch-icon"]')
+      .length > 0;
+
+  const headings = [];
+  $('h1,h2,h3,h4,h5,h6').each((index, element) => {
+    const tagName = (element.tagName || element.name || '').toLowerCase();
+    headings.push({
+      level: Number(tagName.replace('h', '')),
+      text: cleanText($(element).text()),
+    });
+  });
+
+  const links = [];
+  $('a[href]').each((index, element) => {
+    const href = ($(element).attr('href') || '').trim();
+    const absoluteUrl = toAbsoluteHttpUrl(href, baseUrl);
+
+    if (!absoluteUrl) {
+      return;
+    }
+
+    links.push({
+      href,
+      absoluteUrl: stripHash(absoluteUrl),
+      text: getAccessibleText($, element),
+    });
+  });
+
+  const images = [];
+  $('img').each((index, element) => {
+    const alt = $(element).attr('alt');
+    const src =
+      $(element).attr('src') ||
+      $(element).attr('data-src') ||
+      $(element).attr('data-lazy-src') ||
+      '';
+    images.push({
+      src,
+      absoluteUrl: toAbsoluteHttpUrl(src, baseUrl),
+      hasAlt: alt !== undefined,
+      alt: alt || '',
+      hasWidth: Boolean($(element).attr('width')),
+      hasHeight: Boolean($(element).attr('height')),
+      loading: ($(element).attr('loading') || '').toLowerCase(),
+      index,
+    });
+  });
+
+  const scripts = [];
+  $('script[src]').each((index, element) => {
+    const src = $(element).attr('src') || '';
+    const absoluteUrl = toAbsoluteHttpUrl(src, baseUrl);
+    if (absoluteUrl) {
+      scripts.push({ src, absoluteUrl });
+    }
+  });
+
+  const stylesheets = [];
+  $('link[href]').each((index, element) => {
+    const rel = ($(element).attr('rel') || '').toLowerCase();
+    if (!rel.split(/\s+/).includes('stylesheet')) {
+      return;
+    }
+
+    const href = $(element).attr('href') || '';
+    const absoluteUrl = toAbsoluteHttpUrl(href, baseUrl);
+    if (absoluteUrl) {
+      stylesheets.push({ href, absoluteUrl });
+    }
+  });
+
+  const hreflangTags = [];
+  $('link[rel="alternate"][hreflang]').each((index, element) => {
+    const hreflang = ($(element).attr('hreflang') || '').trim();
+    const href = ($(element).attr('href') || '').trim();
+    hreflangTags.push({
+      hreflang,
+      href,
+      absoluteUrl: toAbsoluteHttpUrl(href, baseUrl),
+    });
+  });
+
+  const jsonLdScripts = [];
+  $('script[type="application/ld+json"]').each((index, element) => {
+    const content = ($(element).html() || '').trim();
+    jsonLdScripts.push(parseJsonLd(content));
+  });
+
+  const ogTitle = $('meta[property="og:title"]').first().attr('content') || null;
+  const ogDescription =
+    $('meta[property="og:description"]').first().attr('content') || null;
+  const ogImageValue =
+    $('meta[property="og:image"]').first().attr('content') || null;
+  const twitter = {
+    card: $('meta[name="twitter:card"]').first().attr('content') || null,
+    title: $('meta[name="twitter:title"]').first().attr('content') || null,
+    description:
+      $('meta[name="twitter:description"]').first().attr('content') || null,
+    image: $('meta[name="twitter:image"]').first().attr('content') || null,
+  };
+
+  const final = new URL(baseUrl);
+  const internalLinks = links.filter((link) =>
+    sameSite(link.absoluteUrl, final.href),
+  ).length;
+  const externalLinks = links.length - internalLinks;
+  const bodyText = cleanText($('body').text());
+
+  return {
+    title,
+    description,
+    viewport,
+    canonical,
+    robots,
+    favicon,
+    htmlLang,
+    charset,
+    headings,
+    h1: headings.filter((heading) => heading.level === 1),
+    links: uniqueBy(links, (link) => link.absoluteUrl),
+    internalLinks,
+    externalLinks,
+    images,
+    scripts,
+    stylesheets,
+    hreflangTags,
+    jsonLdScripts,
+    ogTitle,
+    ogDescription,
+    ogImage: ogImageValue
+      ? {
+          value: ogImageValue,
+          absoluteUrl: toAbsoluteHttpUrl(ogImageValue, baseUrl),
+        }
+      : null,
+    twitter,
+    wordCount: countWords(bodyText),
+    htmlSizeBytes: Buffer.byteLength(html, 'utf8'),
+    formsAudit: auditForms($),
+    interactiveTextAudit: auditInteractiveText($),
+    contrastAudit: auditStaticContrast($),
+    mixedContent: collectMixedContent($, baseUrl),
+  };
+}
+
+function buildInsights({
+  targetUrl,
+  finalUrl,
+  response,
+  redirects,
+  loadTime,
+  page,
+  robotsAudit,
+  canonicalAudit,
+  ogImageAudit,
+  linkAudit,
+  resourceAudit,
+  compressionAudit,
+  tlsAudit,
+}) {
+  const insights = [];
+  const finalUrlObject = new URL(finalUrl);
+  const targetUrlObject = new URL(targetUrl);
+  const status = response.status;
+  const contentType = getHeader(response.headers, 'content-type');
+
+  if (status >= 500) {
+    addInsight(
+      insights,
+      'danger',
+      'Technical',
+      'Server returned error ' + status,
+      'Page is unavailable to users and search bots.',
+    );
+  } else if (status >= 400) {
+    addInsight(
+      insights,
+      'danger',
+      'Technical',
+      'Page returned status ' + status,
+      'Such URL should not be the main landing page.',
+    );
+  } else if (status >= 300) {
+    addInsight(
+      insights,
+      'warning',
+      'Technical',
+      'Final status ' + status,
+      'Check that redirect is intentional.',
+    );
+  } else {
+    addInsight(
+      insights,
+      'success',
+      'Technical',
+      'HTTP status is normal',
+      'Final page responds with code ' + status + '.',
+    );
+  }
+
+  if (redirects.length > 0) {
+    const hasHttpToHttps = redirects.some(
+      (redirect) =>
+        redirect.from.startsWith('http://') && redirect.to.startsWith('https://'),
+    );
+    addInsight(
+      insights,
+      hasHttpToHttps ? 'success' : 'info',
+      'Technical',
+      'Redirect chain: ' + redirects.length,
+      hasHttpToHttps
+        ? 'HTTP version correctly redirects visitor to HTTPS.'
+        : 'There are intermediate redirects. Shorter chain means faster loading.',
+      redirects.map(
+        (redirect) => redirect.status + ': ' + redirect.from + ' -> ' + redirect.to,
+      ),
+    );
+  } else if (targetUrlObject.protocol === 'http:' && finalUrlObject.protocol === 'http:') {
+    addInsight(
+      insights,
+      'warning',
+      'Security',
+      'HTTP does not redirect to HTTPS',
+      'For public sites, it is better to set up 301 redirect to secure version.',
+    );
+  }
+
+  if (!contentType || contentType.includes('text/html')) {
+    addInsight(
+      insights,
+      'success',
+      'Technical',
+      'Content type suitable for HTML page',
+      contentType ? 'Content-Type: ' + contentType : 'Server did not specify Content-Type.',
+    );
+  } else {
+    addInsight(
+      insights,
+      'warning',
+      'Technical',
+      'Unusual Content-Type',
+      'Expected HTML, but server returned: ' + contentType + '.',
+    );
+  }
+
+  if (finalUrlObject.protocol !== 'https:') {
+    addInsight(
+      insights,
+      'danger',
+      'Security',
+      'HTTPS missing',
+      'Browsers will mark site as unsafe, and some SEO signals will be weaker.',
+    );
+  } else {
+    addInsight(
+      insights,
+      'success',
+      'Security',
+      'HTTPS enabled',
+      'Final URL uses secure protocol.',
+    );
+  }
+
+  addTitleInsights(insights, page);
+  addDescriptionInsights(insights, page.description);
+  addHeadingInsights(insights, page);
+  addIndexingInsights(insights, page, robotsAudit);
+  addCanonicalInsights(insights, canonicalAudit);
+  addMediaInsights(insights, page, ogImageAudit, resourceAudit);
+  addSocialInsights(insights, page, ogImageAudit);
+  addContentInsights(insights, page);
+  addPerformanceInsights(
+    insights,
+    loadTime,
+    page,
+    resourceAudit,
+    compressionAudit,
+  );
+  addSecurityInsights(insights, response.headers, finalUrlObject, page, tlsAudit);
+  addAccessibilityInsights(insights, page);
+  addLinkInsights(insights, linkAudit);
+  addInternationalInsights(insights, page);
+
+  return insights;
+}
+
+function addTitleInsights(insights, page) {
+  if (!page.title) {
+    addInsight(
+      insights,
+      'danger',
+      'SEO',
+      'Title tag missing',
+      'Search engines and browser tab have nothing to show as page name.',
+    );
+    return;
+  }
+
+  const length = page.title.length;
+  if (length < 30 || length > 60) {
+    addInsight(
+      insights,
+      'warning',
+      'SEO',
+      'Suboptimal Title length (' + length + ' chars)',
+      'Guideline for snippet: 30-60 characters.',
+      ['Title: ' + page.title],
+    );
+  } else {
+    addInsight(
+      insights,
+      'success',
+      'SEO',
+      'Title has good length',
+      'Page title falls within recommended range.',
+      ['Title: ' + page.title],
+    );
+  }
+
+  if (isGenericTitle(page.title)) {
+    addInsight(
+      insights,
+      'warning',
+      'SEO',
+      'Title too generic',
+      'Name like "Home" or "Main" poorly explains page value.',
+      ['Title: ' + page.title],
+    );
+  }
+
+  if (
+    page.h1.length === 1 &&
+    normalizeTextForCompare(page.h1[0].text) === normalizeTextForCompare(page.title)
+  ) {
+    addInsight(
+      insights,
+      'info',
+      'SEO',
+      'Title and H1 match',
+      'This is not an error, but often better to give title slightly more context for search.',
+      ['Title: ' + page.title],
+    );
+  }
+}
+
+function addDescriptionInsights(insights, description) {
+  if (!description) {
+    addInsight(
+      insights,
+      'danger',
+      'SEO',
+      'No meta description',
+      'Random text fragment from page may appear in search results.',
+    );
+    return;
+  }
+
+  const length = description.length;
+  if (length < 70 || length > 160) {
+    addInsight(
+      insights,
+      'warning',
+      'SEO',
+      'Suboptimal description length (' + length + ' chars)',
+      'Good guideline for snippet: 70-160 characters.',
+      ['Meta description: ' + description],
+    );
+  } else {
+    addInsight(
+      insights,
+      'success',
+      'SEO',
+      'Meta description filled correctly',
+      'Product description falls within working length range.',
+      ['Meta description: ' + description],
+    );
+  }
+}
+
+function addHeadingInsights(insights, page) {
+  if (page.h1.length === 0) {
+    addInsight(
+      insights,
+      'danger',
+      'SEO',
+      'H1 missing',
+      'Search engines have harder time determining main page topic.',
+    );
+  } else if (page.h1.length > 1) {
+    addInsight(
+      insights,
+      'warning',
+      'SEO',
+      'Multiple H1 found (' + page.h1.length + ')',
+      'Better to keep one main page heading.',
+      page.h1.map((heading) => heading.text).filter(Boolean).slice(0, 5),
+    );
+  } else {
+    addInsight(
+      insights,
+      'success',
+      'SEO',
+      'H1 found',
+      'Main heading: "' + page.h1[0].text + '".',
+    );
+  }
+
+  const emptyHeadings = page.headings.filter((heading) => !heading.text);
+  const skippedLevels = findSkippedHeadingLevels(page.headings);
+
+  if (emptyHeadings.length > 0) {
+    addInsight(
+      insights,
+      'warning',
+      'Accessibility',
+      'Empty headings found',
+      'Empty H-tags hinder screen reader navigation and blur page structure.',
+    );
+  }
+
+  if (skippedLevels.length > 0) {
+    addInsight(
+      insights,
+      'warning',
+      'SEO',
+      'Heading hierarchy broken',
+      'There are level skips, e.g., H2 directly to H4.',
+      skippedLevels.slice(0, 5),
+    );
+  } else if (page.headings.length > 0) {
+    addInsight(
+      insights,
+      'success',
+      'SEO',
+      'Heading hierarchy looks sequential',
+      'No major H1-H6 level gaps found.',
+    );
+  }
+}
+
+function addIndexingInsights(insights, page, robotsAudit) {
+  const robots = (page.robots || '').toLowerCase();
+  if (robots.includes('noindex') || robots.includes('nofollow')) {
+    addInsight(
+      insights,
+      'danger',
+      'Indexing',
+      'Meta robots blocks indexing or links',
+      'Directives found on page: ' + page.robots + '.',
+    );
+  } else {
+    addInsight(
+      insights,
+      'success',
+      'Indexing',
+      'Meta robots does not block page',
+      page.robots
+        ? 'Current directives: ' + page.robots + '.'
+        : 'No blocking meta robots directives found.',
+    );
+  }
+
+  if (!robotsAudit.robots.exists) {
+    addInsight(
+      insights,
+      'warning',
+      'Indexing',
+      'robots.txt not found',
+      'File is not required, but helps control site crawling.',
+      [robotsAudit.robots.url],
+    );
+  } else if (robotsAudit.robots.blocksTarget || robotsAudit.robots.blocksAll) {
+    addInsight(
+      insights,
+      'danger',
+      'Indexing',
+      'robots.txt blocks page',
+      robotsAudit.robots.blocksAll
+        ? 'For User-agent: * found Disallow: /.'
+        : 'robots.txt rules prohibit crawling checked path.',
+      [robotsAudit.robots.url],
+    );
+  } else {
+    addInsight(
+      insights,
+      'success',
+      'Indexing',
+      'robots.txt does not block checked page',
+      'File is available and does not contain explicit ban for this URL.',
+      [robotsAudit.robots.url],
+    );
+  }
+
+  if (robotsAudit.sitemap.exists) {
+    addInsight(
+      insights,
+      robotsAudit.sitemap.validXml ? 'success' : 'warning',
+      'Indexing',
+      'Sitemap found',
+      robotsAudit.sitemap.validXml
+        ? 'Site map looks like valid XML sitemap.'
+        : 'File is available but does not look like standard sitemap XML.',
+      [robotsAudit.sitemap.url],
+    );
+  } else {
+    addInsight(
+      insights,
+      'warning',
+      'Indexing',
+      'Sitemap not found',
+      'Add sitemap.xml or Sitemap link in robots.txt to speed up page discovery.',
+      robotsAudit.sitemap.checkedUrls,
+    );
+  }
+}
+
+function addCanonicalInsights(insights, canonicalAudit) {
+  if (!canonicalAudit) {
+    addInsight(
+      insights,
+      'warning',
+      'SEO',
+      'Canonical not specified',
+      'Search engines may index page duplicates with parameters or alternative URLs.',
+    );
+    return;
+  }
+
+  if (!canonicalAudit.absoluteUrl) {
+    addInsight(
+      insights,
+      'danger',
+      'SEO',
+      'Canonical cannot be read',
+      'Canonical value could not be converted to HTTP/HTTPS URL.',
+      [canonicalAudit.value],
+    );
+    return;
+  }
+
+  const details = [
+    'Canonical: ' + canonicalAudit.absoluteUrl,
+    canonicalAudit.status ? 'Status: ' + canonicalAudit.status : null,
+  ].filter(Boolean);
+
+  if (!canonicalAudit.isAbsolute) {
+    addInsight(
+      insights,
+      'warning',
+      'SEO',
+      'Canonical specified as relative URL',
+      'Better to use full absolute address.',
+      details,
+    );
+  } else if (!canonicalAudit.sameDomain) {
+    addInsight(
+      insights,
+      'warning',
+      'SEO',
+      'Canonical points to different domain',
+      'This is acceptable only if you intentionally pass canonicality to another page version.',
+      details,
+    );
+  } else if (!canonicalAudit.ok) {
+    addInsight(
+      insights,
+      'danger',
+      'SEO',
+      'Canonical points to unavailable URL',
+      'Canonical address must open without errors.',
+      details,
+    );
+  } else {
+    addInsight(
+      insights,
+      'success',
+      'SEO',
+      'Canonical configured correctly',
+      'Canonical URL is absolute, available and on same domain.',
+      details,
+    );
+  }
+}
+
+function addMediaInsights(insights, page, ogImageAudit, resourceAudit) {
+  const missingAlt = page.images.filter((image) => !image.hasAlt).length;
+  const emptyAlt = page.images.filter(
+    (image) => image.hasAlt && image.alt.trim() === '',
+  ).length;
+
+  if (page.images.length === 0) {
+    addInsight(
+      insights,
+      'info',
+      'Media',
+      'No images found on page',
+      'If page is selling or content-based, visual block can improve engagement.',
+    );
+  } else if (missingAlt > 0 || emptyAlt > 0) {
+    addInsight(
+      insights,
+      'warning',
+      'Accessibility',
+      'Image alt issues',
+      'Without alt, page is less accessible and loses image search signals.',
+      [
+        'Missing alt: ' + missingAlt,
+        'Empty alt: ' + emptyAlt,
+        'Total images: ' + page.images.length,
+      ],
+    );
+  } else {
+    addInsight(
+      insights,
+      'success',
+      'Accessibility',
+      'Image alt filled',
+      'All found images have non-empty alt.',
+    );
+  }
+
+  const missingDimensions = page.images.filter(
+    (image) => !image.hasWidth || !image.hasHeight,
+  ).length;
+  if (missingDimensions > 0) {
+    addInsight(
+      insights,
+      'warning',
+      'Performance',
+      'Images missing width/height',
+      'Dimensions help browser reserve space in advance and reduce layout shifts.',
+      ['Missing dimensions: ' + missingDimensions + ' / ' + page.images.length],
+    );
+  } else if (page.images.length > 0) {
+    addInsight(
+      insights,
+      'success',
+      'Performance',
+      'Image dimensions set',
+      'All found images have width and height.',
+    );
+  }
+
+  const lazyCandidates = page.images.filter(
+    (image) =>
+      image.index >= 3 &&
+      image.absoluteUrl &&
+      image.loading !== 'lazy' &&
+      image.loading !== 'eager',
+  );
+  if (lazyCandidates.length > 0) {
+    addInsight(
+      insights,
+      'info',
+      'Performance',
+      'Lazy loading candidates found',
+      'Images below first blocks can often be loaded lazily via loading="lazy".',
+      ['Candidates: ' + lazyCandidates.length],
+    );
+  }
+
+  if (resourceAudit.heavyImages.length > 0) {
+    addInsight(
+      insights,
+      'warning',
+      'Performance',
+      'Heavy images found',
+      'Images larger than 500 KB can significantly slow down page.',
+      resourceAudit.heavyImages
+        .slice(0, 5)
+        .map((image) => formatBytes(image.bytes) + ' - ' + image.url),
+    );
+  }
+
+  if (page.ogImage && !page.ogImage.absoluteUrl) {
+    addInsight(
+      insights,
+      'warning',
+      'Social',
+      'OG image specified incorrectly',
+      'Preview image must be accessible HTTP/HTTPS URL.',
+      [page.ogImage.value],
+    );
+  } else if (page.ogImage && ogImageAudit && !ogImageAudit.ok) {
+    addInsight(
+      insights,
+      'warning',
+      'Social',
+      'OG image unavailable',
+      'Social networks may not generate preview.',
+      [page.ogImage.absoluteUrl],
+    );
+  } else if (page.ogImage) {
+    addInsight(
+      insights,
+      'success',
+      'Social',
+      'OG image available',
+      'Preview image opens without error.',
+    );
+  }
+}
+
+function addSocialInsights(insights, page) {
+  const missingOg = [];
+  if (!page.ogTitle) missingOg.push('og:title');
+  if (!page.ogDescription) missingOg.push('og:description');
+  if (!page.ogImage) missingOg.push('og:image');
+
+  if (missingOg.length > 0) {
+    addInsight(
+      insights,
+      'warning',
+      'Social',
+      'Open Graph incomplete',
+      'When reposting, link may look weaker or without image.',
+      missingOg,
+    );
+  } else {
+    addInsight(
+      insights,
+      'success',
+      'Social',
+      'Open Graph configured',
+      'Main OG tags for preview are present.',
+    );
+  }
+
+  const missingTwitter = [];
+  if (!page.twitter.card) missingTwitter.push('twitter:card');
+  if (!page.twitter.title) missingTwitter.push('twitter:title');
+  if (!page.twitter.description) missingTwitter.push('twitter:description');
+  if (!page.twitter.image) missingTwitter.push('twitter:image');
+
+  if (missingTwitter.length > 0) {
+    addInsight(
+      insights,
+      'warning',
+      'Social',
+      'Twitter Card incomplete',
+      'For X/Twitter and similar clients, better to add full tag set.',
+      missingTwitter,
+    );
+  } else {
+    addInsight(
+      insights,
+      'success',
+      'Social',
+      'Twitter Card configured',
+      'All main Twitter meta tags found.',
+    );
+  }
+}
+
+function addContentInsights(insights, page) {
+  if (page.wordCount < 300) {
+    addInsight(
+      insights,
+      'warning',
+      'Content',
+      'Little text on page',
+      'Thin pages are harder to rank for content queries.',
+      ['Words: ' + page.wordCount],
+    );
+  } else {
+    addInsight(
+      insights,
+      'success',
+      'Content',
+      'Text volume looks sufficient',
+      'Approximately ' + page.wordCount + ' words found on page.',
+    );
+  }
+
+  const invalidJsonLd = page.jsonLdScripts.filter((script) => !script.valid);
+  if (page.jsonLdScripts.length === 0) {
+    addInsight(
+      insights,
+      'info',
+      'SEO',
+      'JSON-LD/schema.org not found',
+      'Structured data not required, but can improve rich snippets.',
+    );
+  } else if (invalidJsonLd.length > 0) {
+    addInsight(
+      insights,
+      'danger',
+      'SEO',
+      'JSON-LD contains errors',
+      'Incorrect JSON will not be processed by search engines.',
+      invalidJsonLd.slice(0, 3).map((script) => script.error),
+    );
+  } else {
+    addInsight(
+      insights,
+      'success',
+      'SEO',
+      'JSON-LD valid',
+      'Structured data blocks found: ' + page.jsonLdScripts.length + '.',
+    );
+  }
+}
+
+function addPerformanceInsights(
+  insights,
+  loadTime,
+  page,
+  resourceAudit,
+  compressionAudit,
+) {
+  if (loadTime > 5000) {
+    addInsight(
+      insights,
+      'danger',
+      'Performance',
+      'Very slow response (' + loadTime + ' ms)',
+      'Check server, caching and heavy blocking resources.',
+    );
+  } else if (loadTime > 2000) {
+    addInsight(
+      insights,
+      'warning',
+      'Performance',
+      'Slow server response (' + loadTime + ' ms)',
+      'Page responds longer than 2 seconds.',
+    );
+  } else {
+    addInsight(
+      insights,
+      'success',
+      'Performance',
+      'Server responds quickly',
+      'Response received in ' + loadTime + ' ms.',
+    );
+  }
+
+  if (page.htmlSizeBytes > 500 * 1024) {
+    addInsight(
+      insights,
+      'danger',
+      'Performance',
+      'HTML too heavy',
+      'HTML size exceeds 500 KB before accounting for external resources.',
+      [formatBytes(page.htmlSizeBytes)],
+    );
+  } else if (page.htmlSizeBytes > 200 * 1024) {
+    addInsight(
+      insights,
+      'warning',
+      'Performance',
+      'HTML larger than usual',
+      'Worth checking inline styles, data and extra markup.',
+      [formatBytes(page.htmlSizeBytes)],
+    );
+  } else {
+    addInsight(
+      insights,
+      'success',
+      'Performance',
+      'HTML size normal',
+      'HTML weighs ' + formatBytes(page.htmlSizeBytes) + '.',
+    );
+  }
+
+  if (compressionAudit.encoding) {
+    addInsight(
+      insights,
+      'success',
+      'Performance',
+      'Compression enabled',
+      'Server serves page with Content-Encoding: ' + compressionAudit.encoding + '.',
+    );
+  } else {
+    addInsight(
+      insights,
+      'warning',
+      'Performance',
+      'Compression not detected',
+      'For HTML/CSS/JS usually worth enabling gzip or brotli.',
+    );
+  }
+
+  const assetCount = page.scripts.length + page.stylesheets.length;
+  if (page.scripts.length > 20 || page.stylesheets.length > 10) {
+    addInsight(
+      insights,
+      'warning',
+      'Performance',
+      'Many JS/CSS files',
+      'Large number of external files increases loading overhead.',
+      ['JS: ' + page.scripts.length, 'CSS: ' + page.stylesheets.length],
+    );
+  } else {
+    addInsight(
+      insights,
+      assetCount > 0 ? 'success' : 'info',
+      'Performance',
+      'JS/CSS file count acceptable',
+      'JS: ' + page.scripts.length + ', CSS: ' + page.stylesheets.length + '.',
+    );
+  }
+
+  if (resourceAudit.unreachableAssets.length > 0) {
+    addInsight(
+      insights,
+      'danger',
+      'Technical',
+      'Unreachable page resources found',
+      'Broken CSS, JS or images break interface and metrics.',
+      resourceAudit.unreachableAssets
+        .slice(0, 5)
+        .map((asset) => (asset.status || 'ERR') + ' - ' + asset.url),
+    );
+  }
+
+  if (resourceAudit.cacheIssues.length > 0) {
+    addInsight(
+      insights,
+      'warning',
+      'Performance',
+      'Static resources have weak caching',
+      'For CSS/JS/images usually need Cache-Control with long max-age.',
+      resourceAudit.cacheIssues
+        .slice(0, 5)
+        .map((asset) => asset.reason + ': ' + asset.url),
+    );
+  } else if (resourceAudit.checkedResources > 0) {
+    addInsight(
+      insights,
+      'success',
+      'Performance',
+      'Static resource caching looks good',
+      'Resources checked: ' + resourceAudit.checkedResources + '.',
+    );
+  }
+}
+
+function addSecurityInsights(insights, headers, finalUrlObject, page, tlsAudit) {
+  const securityHeaders = [
+    {
+      name: 'strict-transport-security',
+      title: 'HSTS',
+      requiredOnHttps: true,
+    },
+    {
+      name: 'content-security-policy',
+      title: 'Content-Security-Policy',
+    },
+    {
+      name: 'x-content-type-options',
+      title: 'X-Content-Type-Options',
+      expected: 'nosniff',
+    },
+    {
+      name: 'referrer-policy',
+      title: 'Referrer-Policy',
+    },
+    {
+      name: 'x-frame-options',
+      title: 'X-Frame-Options',
+    },
+  ];
+
+  securityHeaders.forEach((header) => {
+    if (header.requiredOnHttps && finalUrlObject.protocol !== 'https:') {
+      return;
+    }
+
+    const value = getHeader(headers, header.name);
+    if (!value) {
+      addInsight(
+        insights,
+        'warning',
+        'Security',
+        'Missing header ' + header.title,
+        'This security header reduces risk of typical attacks or data leaks.',
+      );
+      return;
+    }
+
+    if (header.expected && !value.toLowerCase().includes(header.expected)) {
+      addInsight(
+        insights,
+        'warning',
+        'Security',
+        header.title + ' set unusually',
+        'Expected value with "' + header.expected + '", found: ' + value + '.',
+      );
+      return;
+    }
+
+    addInsight(
+      insights,
+      'success',
+      'Security',
+      header.title + ' present',
+      'Value: ' + value + '.',
+    );
+  });
+
+  if (page.mixedContent.length > 0) {
+    addInsight(
+      insights,
+      'danger',
+      'Security',
+      'Mixed content found',
+      'HTTPS page references HTTP resources that browser may block.',
+      page.mixedContent.slice(0, 5),
+    );
+  } else if (finalUrlObject.protocol === 'https:') {
+    addInsight(
+      insights,
+      'success',
+      'Security',
+      'Mixed content not found',
+      'No explicit HTTP resources for loading in HTML.',
+    );
+  }
+
+  addCookieInsights(insights, headers);
+  addTlsInsights(insights, tlsAudit);
+}
+
+function addCookieInsights(insights, headers) {
+  const cookies = normalizeSetCookie(headers['set-cookie']);
+  if (cookies.length === 0) {
+    addInsight(
+      insights,
+      'info',
+      'Security',
+      'Set-Cookie not found',
+      'Page does not set cookies in first response.',
+    );
+    return;
+  }
+
+  const issues = [];
+  cookies.forEach((cookie, index) => {
+    const lower = cookie.toLowerCase();
+    const name = cookie.split('=')[0] || 'cookie #' + (index + 1);
+    if (!lower.includes('; secure')) issues.push(name + ': no Secure');
+    if (!lower.includes('; httponly')) issues.push(name + ': no HttpOnly');
+    if (!lower.includes('; samesite')) issues.push(name + ': no SameSite');
+  });
+
+  if (issues.length > 0) {
+    addInsight(
+      insights,
+      'warning',
+      'Security',
+      'Cookies missing protective flags',
+      'For user sessions especially important Secure, HttpOnly and SameSite.',
+      issues.slice(0, 8),
+    );
+  } else {
+    addInsight(
+      insights,
+      'success',
+      'Security',
+      'Cookies protected with flags',
+      'All cookies from first response contain Secure, HttpOnly and SameSite.',
+    );
+  }
+}
+
+function addTlsInsights(insights, tlsAudit) {
+  if (tlsAudit.skipped) {
+    return;
+  }
+
+  if (tlsAudit.error) {
+    addInsight(
+      insights,
+      'warning',
+      'Security',
+      'TLS certificate could not be verified',
+      tlsAudit.error,
+    );
+    return;
+  }
+
+  if (!tlsAudit.authorized) {
+    addInsight(
+      insights,
+      'danger',
+      'Security',
+      'TLS certificate failed verification',
+      tlsAudit.authorizationError || 'Certificate untrusted or configured incorrectly.',
+    );
+  }
+
+  if (tlsAudit.daysLeft < 0) {
+    addInsight(
+      insights,
+      'danger',
+      'Security',
+      'TLS certificate expired',
+      'Validity expired: ' + tlsAudit.validTo + '.',
+    );
+  } else if (tlsAudit.daysLeft < 14) {
+    addInsight(
+      insights,
+      'danger',
+      'Security',
+      'TLS certificate expiring soon',
+      'Days left: ' + tlsAudit.daysLeft + '.',
+    );
+  } else if (tlsAudit.daysLeft < 30) {
+    addInsight(
+      insights,
+      'warning',
+      'Security',
+      'TLS certificate near expiration',
+      'Days left: ' + tlsAudit.daysLeft + '.',
+    );
+  } else {
+    addInsight(
+      insights,
+      'success',
+      'Security',
+      'TLS certificate current',
+      'Approximately ' + tlsAudit.daysLeft + ' days until expiration.',
+    );
+  }
+}
+
+function addAccessibilityInsights(insights, page) {
+  if (!page.viewport) {
+    addInsight(
+      insights,
+      'danger',
+      'Mobile',
+      'No meta viewport',
+      'Page may display incorrectly on smartphones.',
+    );
+  } else {
+    addInsight(
+      insights,
+      'success',
+      'Mobile',
+      'Viewport set',
+      'Page contains meta viewport.',
+    );
+  }
+
+  if (!page.favicon) {
+    addInsight(
+      insights,
+      'warning',
+      'Branding',
+      'Favicon not found',
+      'Without icon, site looks less complete in tabs and bookmarks.',
+    );
+  } else {
+    addInsight(
+      insights,
+      'success',
+      'Branding',
+      'Favicon found',
+      'Site icon connected.',
+    );
+  }
+
+  if (page.formsAudit.total === 0) {
+    addInsight(
+      insights,
+      'info',
+      'Accessibility',
+      'No form fields found',
+      'Label check not applied.',
+    );
+  } else if (page.formsAudit.missingLabels.length > 0) {
+    addInsight(
+      insights,
+      'warning',
+      'Accessibility',
+      'Form fields missing label',
+      'Label helps screen reader users and increases click area.',
+      [
+        'Missing label: ' +
+          page.formsAudit.missingLabels.length +
+          ' / ' +
+          page.formsAudit.total,
+      ],
+    );
+  } else {
+    addInsight(
+      insights,
+      'success',
+      'Accessibility',
+      'Form fields labeled',
+      'All checked fields have label or aria-label.',
+    );
+  }
+
+  const emptyInteractive =
+    page.interactiveTextAudit.emptyLinks.length +
+    page.interactiveTextAudit.emptyButtons.length;
+  if (emptyInteractive > 0) {
+    addInsight(
+      insights,
+      'warning',
+      'Accessibility',
+      'Links or buttons without clear text',
+      'Interactive elements need text, aria-label or title.',
+      [
+        'Empty links: ' + page.interactiveTextAudit.emptyLinks.length,
+        'Empty buttons: ' + page.interactiveTextAudit.emptyButtons.length,
+      ],
+    );
+  } else {
+    addInsight(
+      insights,
+      'success',
+      'Accessibility',
+      'Link and button text readable',
+      'No empty interactive elements found.',
+    );
+  }
+
+  if (page.contrastAudit.lowContrast.length > 0) {
+    addInsight(
+      insights,
+      'warning',
+      'Accessibility',
+      'Potentially low contrast found',
+      'Static check of inline/style CSS found color pairs below WCAG 4.5:1.',
+      page.contrastAudit.lowContrast
+        .slice(0, 5)
+        .map((item) => item.ratio + ': ' + item.sample),
+    );
+  } else {
+    addInsight(
+      insights,
+      page.contrastAudit.checked > 0 ? 'success' : 'info',
+      'Accessibility',
+      'No critical contrast issues found',
+      page.contrastAudit.checked > 0
+        ? 'Color pairs checked: ' + page.contrastAudit.checked + '.'
+        : 'No explicit inline/style color + background pairs found on page.',
+    );
+  }
+}
+
+function addLinkInsights(insights, linkAudit) {
+  if (linkAudit.checked === 0) {
+    addInsight(
+      insights,
+      'info',
+      'Links',
+      'No links to check found',
+      'Page has no HTTP/HTTPS links.',
+    );
+    return;
+  }
+
+  if (linkAudit.broken.length > 0) {
+    addInsight(
+      insights,
+      'danger',
+      'Links',
+      'Broken links found',
+      'Such links worsen user experience and waste crawl budget.',
+      linkAudit.broken
+        .slice(0, 8)
+        .map((link) => (link.status || 'ERR') + ' - ' + link.url),
+    );
+  } else {
+    addInsight(
+      insights,
+      'success',
+      'Links',
+      'No broken links found',
+      'Links checked: ' + linkAudit.checked + '.',
+    );
+  }
+
+  if (linkAudit.total > linkAudit.checked) {
+    addInsight(
+      insights,
+      'info',
+      'Links',
+      'Link sample checked',
+      'To prevent audit hanging, checked first ' +
+        linkAudit.checked +
+        ' of ' +
+        linkAudit.total +
+        ' unique links.',
+    );
+  }
+}
+
+function addInternationalInsights(insights, page) {
+  if (!page.htmlLang) {
+    addInsight(
+      insights,
+      'warning',
+      'Accessibility',
+      'HTML lang not specified',
+      'Lang attribute helps browsers, translators and screen readers.',
+    );
+  } else {
+    addInsight(
+      insights,
+      'success',
+      'Accessibility',
+      'Page language specified',
+      'html lang="' + page.htmlLang + '".',
+    );
+  }
+
+  if (!page.charset) {
+    addInsight(
+      insights,
+      'warning',
+      'Technical',
+      'Charset not specified',
+      'Add meta charset to avoid encoding issues.',
+    );
+  } else {
+    addInsight(
+      insights,
+      'success',
+      'Technical',
+      'Charset specified',
+      'Encoding: ' + page.charset + '.',
+    );
+  }
+
+  const invalidHreflang = page.hreflangTags.filter(
+    (tag) => !isValidHreflang(tag.hreflang) || !tag.absoluteUrl,
+  );
+  if (page.hreflangTags.length === 0) {
+    addInsight(
+      insights,
+      'info',
+      'SEO',
+      'hreflang not found',
+      'Normal for single-language site. For multilingual versions, tags needed.',
+    );
+  } else if (invalidHreflang.length > 0) {
+    addInsight(
+      insights,
+      'warning',
+      'SEO',
+      'hreflang errors found',
+      'Check language codes and href of alternative pages.',
+      invalidHreflang
+        .slice(0, 5)
+        .map((tag) => tag.hreflang + ' -> ' + tag.href),
+    );
+  } else {
+    addInsight(
+      insights,
+      'success',
+      'SEO',
+      'hreflang looks correct',
+      'Alternative language versions found: ' + page.hreflangTags.length + '.',
+    );
+  }
+}
+
+async function auditLinks(links) {
+  const uniqueLinks = uniqueBy(links, (link) => link.absoluteUrl);
+  const sample = uniqueLinks.slice(0, MAX_LINK_CHECKS);
+  const results = await mapLimit(sample, CONCURRENCY, async (link) => {
+    const result = await inspectUrl(link.absoluteUrl, 'text/html,*/*');
+    return {
+      url: link.absoluteUrl,
+      status: result.status,
+      ok: result.ok || [401, 403].includes(result.status),
+      error: result.error,
+    };
+  });
+
+  return {
+    total: uniqueLinks.length,
+    checked: results.length,
+    broken: results.filter((result) => !result.ok),
+  };
+}
+
+async function auditResources(page) {
+  const resources = uniqueBy(
+    [
+      ...page.stylesheets.map((item) => ({ type: 'css', url: item.absoluteUrl })),
+      ...page.scripts.map((item) => ({ type: 'js', url: item.absoluteUrl })),
+      ...page.images
+        .filter((item) => item.absoluteUrl)
+        .map((item) => ({ type: 'image', url: item.absoluteUrl })),
+    ],
+    (resource) => resource.url,
+  ).slice(0, MAX_RESOURCE_CHECKS);
+
+  const checked = await mapLimit(resources, CONCURRENCY, async (resource) => {
+    const result = await inspectUrl(resource.url, '*/*');
+    return {
+      ...resource,
+      status: result.status,
+      ok: result.ok || [401, 403].includes(result.status),
+      headers: result.headers || {},
+      error: result.error,
+    };
+  });
+
+  const imageChecks = checked
+    .filter((resource) => resource.type === 'image')
+    .slice(0, MAX_IMAGE_HEAD_CHECKS);
+  const heavyImages = imageChecks
+    .map((image) => ({
+      url: image.url,
+      bytes: Number(getHeader(image.headers, 'content-length')) || 0,
+    }))
+    .filter((image) => image.bytes > HEAVY_IMAGE_BYTES);
+
+  const cacheIssues = checked
+    .filter((resource) => resource.ok)
+    .map((resource) => {
+      const cacheControl = getHeader(resource.headers, 'cache-control');
+      if (!cacheControl) {
+        return { url: resource.url, reason: 'No Cache-Control' };
+      }
+
+      const seconds = getMaxAgeSeconds(cacheControl);
+      if (seconds !== null && seconds < GOOD_CACHE_SECONDS) {
+        return {
+          url: resource.url,
+          reason: 'max-age less than 7 days',
+        };
+      }
+
+      if (/no-store|no-cache/i.test(cacheControl)) {
+        return { url: resource.url, reason: 'Caching disabled' };
+      }
+
+      return null;
+    })
+    .filter(Boolean);
+
+  return {
+    checkedResources: checked.length,
+    unreachableAssets: checked.filter((resource) => !resource.ok),
+    cacheIssues,
+    heavyImages,
+  };
+}
+
+async function checkRobotsAndSitemap(finalUrl) {
+  const parsed = new URL(finalUrl);
+  const robotsUrl = new URL('/robots.txt', parsed.origin).href;
+  const robotsResponse = await fetchText(robotsUrl);
+  const robotsData = {
+    url: robotsUrl,
+    status: robotsResponse.status,
+    exists: robotsResponse.status >= 200 && robotsResponse.status < 400,
+    blocksAll: false,
+    blocksTarget: false,
+    sitemaps: [],
+  };
+
+  if (robotsData.exists) {
+    const parsedRobots = parseRobotsTxt(
+      robotsResponse.body,
+      parsed.pathname || '/',
+    );
+    robotsData.blocksAll = parsedRobots.blocksAll;
+    robotsData.blocksTarget = parsedRobots.blocksTarget;
+    robotsData.sitemaps = parsedRobots.sitemaps;
+  }
+
+  const sitemapCandidates = uniqueBy(
+    [
+      ...robotsData.sitemaps,
+      new URL('/sitemap.xml', parsed.origin).href,
+      new URL('/sitemap_index.xml', parsed.origin).href,
+    ].filter(Boolean),
+    (url) => url,
+  ).slice(0, 4);
+
+  const checkedSitemaps = [];
+  let foundSitemap = null;
+  for (const sitemapUrl of sitemapCandidates) {
+    const result = await fetchText(sitemapUrl);
+    const sitemapResult = {
+      url: sitemapUrl,
+      status: result.status,
+      exists: result.status >= 200 && result.status < 400,
+      validXml: /<(urlset|sitemapindex)[\s>]/i.test(result.body || ''),
+    };
+    checkedSitemaps.push(sitemapResult);
+
+    if (sitemapResult.exists && !foundSitemap) {
+      foundSitemap = sitemapResult;
+    }
+  }
+
+  return {
+    robots: robotsData,
+    sitemap: foundSitemap || {
+      exists: false,
+      validXml: false,
+      url: sitemapCandidates[0],
+      checkedUrls: checkedSitemaps.map((item) => item.url),
+    },
+  };
+}
+
+async function inspectCanonical(value, baseUrl) {
+  const absoluteUrl = toAbsoluteHttpUrl(value, baseUrl);
+  if (!absoluteUrl) {
+    return {
+      value,
+      absoluteUrl: null,
+      isAbsolute: false,
+      sameDomain: false,
+      ok: false,
+      status: null,
+    };
+  }
+
+  const result = await inspectUrl(absoluteUrl, 'text/html,*/*');
+  return {
+    value,
+    absoluteUrl,
+    isAbsolute: /^https?:\/\//i.test(value),
+    sameDomain: sameSite(absoluteUrl, baseUrl),
+    ok: result.ok || [401, 403].includes(result.status),
+    status: result.status,
+  };
+}
+
+async function checkCompression(finalUrl) {
+  try {
+    const response = await axios.get(finalUrl, {
+      headers: {
+        'User-Agent': USER_AGENT,
+        Accept: 'text/html,*/*',
+        'Accept-Encoding': 'br, gzip, deflate',
+      },
+      maxRedirects: 0,
+      responseType: 'stream',
+      decompress: false,
+      timeout: RESOURCE_TIMEOUT_MS,
+      validateStatus: () => true,
+    });
+
+    if (response.data && typeof response.data.destroy === 'function') {
+      response.data.destroy();
+    }
+
+    return {
+      encoding: getHeader(response.headers, 'content-encoding') || null,
+    };
+  } catch (error) {
+    return { encoding: null, error: simplifyError(error) };
+  }
+}
+
+async function inspectUrl(url, accept) {
+  if (!url) {
+    return {
+      ok: false,
+      status: null,
+      headers: {},
+      error: 'Invalid URL',
+    };
+  }
+
+  try {
+    let response = await requestHeaders(url, 'HEAD', accept);
+    if ([403, 405, 501].includes(response.status)) {
+      response = await requestHeaders(url, 'GET', accept);
+    }
+
+    return {
+      ok: response.status >= 200 && response.status < 400,
+      status: response.status,
+      headers: response.headers,
+      finalUrl: response.finalUrl,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      status: null,
+      headers: {},
+      error: simplifyError(error),
+    };
+  }
+}
+
+async function requestHeaders(url, method, accept) {
+  const response = await axios.request({
+    url,
+    method,
+    headers: {
+      'User-Agent': USER_AGENT,
+      Accept: accept || '*/*',
+    },
+    maxRedirects: 3,
+    responseType: 'stream',
+    timeout: RESOURCE_TIMEOUT_MS,
+    validateStatus: () => true,
+  });
+
+  if (response.data && typeof response.data.destroy === 'function') {
+    response.data.destroy();
+  }
+
+  return {
+    status: response.status,
+    headers: response.headers || {},
+    finalUrl: response.request?.res?.responseUrl || url,
+  };
+}
+
+async function fetchText(url) {
+  try {
+    const response = await axios.get(url, {
+      headers: {
+        'User-Agent': USER_AGENT,
+        Accept: 'text/plain,application/xml,text/xml,*/*',
+      },
+      maxRedirects: 3,
+      responseType: 'text',
+      timeout: RESOURCE_TIMEOUT_MS,
+      transformResponse: [(data) => data],
+      validateStatus: () => true,
+    });
+
+    return {
+      status: response.status,
+      headers: response.headers || {},
+      body:
+        typeof response.data === 'string'
+          ? response.data
+          : String(response.data || ''),
+    };
+  } catch (error) {
+    return {
+      status: null,
+      headers: {},
+      body: '',
+      error: simplifyError(error),
+    };
+  }
+}
+
+function getTlsCertificateInfo(finalUrl) {
+  const parsed = new URL(finalUrl);
+  if (parsed.protocol !== 'https:') {
+    return Promise.resolve({ skipped: true });
+  }
+
+  return new Promise((resolve) => {
+    const socket = tls.connect(
+      {
+        host: parsed.hostname,
+        port: parsed.port ? Number(parsed.port) : 443,
+        servername: parsed.hostname,
+        rejectUnauthorized: false,
+      },
+      () => {
+        const cert = socket.getPeerCertificate();
+        socket.end();
+
+        if (!cert || !cert.valid_to) {
+          resolve({
+            error: 'Server did not return certificate data.',
+          });
+          return;
+        }
+
+        const validTo = new Date(cert.valid_to);
+        resolve({
+          authorized: socket.authorized,
+          authorizationError: socket.authorizationError,
+          validTo: cert.valid_to,
+          daysLeft: Math.ceil(
+            (validTo.getTime() - Date.now()) / (24 * 60 * 60 * 1000),
+          ),
+          issuer: cert.issuer,
+          subject: cert.subject,
+        });
+      },
+    );
+
+    socket.setTimeout(RESOURCE_TIMEOUT_MS, () => {
+      socket.destroy();
+      resolve({ error: 'TLS certificate check timeout.' });
+    });
+
+    socket.on('error', (error) => {
+      resolve({ error: simplifyError(error) });
+    });
+  });
+}
+
+function parseRobotsTxt(body, targetPath) {
+  const rules = [];
+  const sitemaps = [];
+  let currentApplies = false;
+  let seenDirectiveInGroup = false;
+
+  body.split(/\r?\n/).forEach((rawLine) => {
+    const line = rawLine.split('#')[0].trim();
+    if (!line) {
+      currentApplies = false;
+      seenDirectiveInGroup = false;
+      return;
+    }
+
+    const match = line.match(/^([^:]+):\s*(.*)$/);
+    if (!match) {
+      return;
+    }
+
+    const field = match[1].trim().toLowerCase();
+    const value = match[2].trim();
+
+    if (field === 'sitemap' && value) {
+      sitemaps.push(value);
+      return;
+    }
+
+    if (field === 'user-agent') {
+      if (seenDirectiveInGroup) {
+        currentApplies = false;
+        seenDirectiveInGroup = false;
+      }
+      currentApplies =
+        currentApplies || value === '*' || value.toLowerCase().includes('auditbot');
+      return;
+    }
+
+    if (field === 'allow' || field === 'disallow') {
+      seenDirectiveInGroup = true;
+      if (currentApplies) {
+        rules.push({
+          type: field,
+          path: value,
+        });
+      }
+    }
+  });
+
+  return {
+    blocksAll: isRobotsPathBlocked('/', rules),
+    blocksTarget: isRobotsPathBlocked(targetPath || '/', rules),
+    sitemaps,
+  };
+}
+
+function isRobotsPathBlocked(path, rules) {
+  const applicable = rules.filter((rule) => {
+    if (rule.type === 'disallow' && rule.path === '') return false;
+    return path.startsWith(rule.path || '/');
+  });
+
+  if (applicable.length === 0) {
+    return false;
+  }
+
+  applicable.sort((a, b) => {
+    const lengthDiff = (b.path || '').length - (a.path || '').length;
+    if (lengthDiff !== 0) return lengthDiff;
+    if (a.type === b.type) return 0;
+    return a.type === 'allow' ? -1 : 1;
+  });
+
+  return applicable[0].type === 'disallow';
+}
+
+function auditForms($) {
+  const controls = [];
+  $('input, select, textarea').each((index, element) => {
+    const tag = (element.tagName || element.name || '').toLowerCase();
+    const type = ($(element).attr('type') || '').toLowerCase();
+    if (
+      tag === 'input' &&
+      ['hidden', 'button', 'submit', 'reset', 'image'].includes(type)
+    ) {
+      return;
+    }
+
+    const id = $(element).attr('id');
+    const hasExplicitLabel = id ? $('label[for="' + cssEscape(id) + '"]').length > 0 : false;
+    const hasLabel =
+      hasExplicitLabel ||
+      $(element).closest('label').length > 0 ||
+      Boolean($(element).attr('aria-label')) ||
+      Boolean($(element).attr('aria-labelledby')) ||
+      Boolean($(element).attr('title'));
+
+    controls.push({
+      tag,
+      type,
+      name: $(element).attr('name') || '',
+      hasLabel,
+    });
+  });
+
+  return {
+    total: controls.length,
+    missingLabels: controls.filter((control) => !control.hasLabel),
+  };
+}
+
+function auditInteractiveText($) {
+  const emptyLinks = [];
+  const emptyButtons = [];
+
+  $('a[href]').each((index, element) => {
+    if (!getAccessibleText($, element)) {
+      emptyLinks.push($(element).attr('href') || 'link #' + (index + 1));
+    }
+  });
+
+  $('button').each((index, element) => {
+    if (!getAccessibleText($, element)) {
+      emptyButtons.push($(element).attr('id') || 'button #' + (index + 1));
+    }
+  });
+
+  return { emptyLinks, emptyButtons };
+}
+
+function auditStaticContrast($) {
+  const checkedPairs = [];
+
+  $('[style]').each((index, element) => {
+    const declarations = parseCssDeclarations($(element).attr('style') || '');
+    const pair = colorPairFromDeclarations(declarations);
+    if (pair) {
+      checkedPairs.push({
+        ...pair,
+        sample: cleanText($(element).text()).slice(0, 60) || element.tagName,
+      });
+    }
+  });
+
+  $('style').each((index, element) => {
+    const css = $(element).html() || '';
+    const ruleMatches = css.matchAll(/\{([^{}]+)\}/g);
+    for (const match of ruleMatches) {
+      const declarations = parseCssDeclarations(match[1]);
+      const pair = colorPairFromDeclarations(declarations);
+      if (pair) {
+        checkedPairs.push({
+          ...pair,
+          sample: 'style block #' + (index + 1),
+        });
+      }
+    }
+  });
+
+  const lowContrast = checkedPairs
+    .map((pair) => ({
+      sample: pair.sample,
+      ratio: calculateContrastRatio(pair.foreground, pair.background).toFixed(2),
+    }))
+    .filter((pair) => Number(pair.ratio) < 4.5);
+
+  return {
+    checked: checkedPairs.length,
+    lowContrast,
+  };
+}
+
+function collectMixedContent($, baseUrl) {
+  const base = new URL(baseUrl);
+  if (base.protocol !== 'https:') {
+    return [];
+  }
+
+  const mixed = [];
+  $('[src], link[href]').each((index, element) => {
+    const src = $(element).attr('src') || $(element).attr('href') || '';
+    if (/^http:\/\//i.test(src)) {
+      mixed.push(src);
+    }
+  });
+
+  return uniqueBy(mixed, (item) => item).slice(0, 20);
+}
+
+function parseJsonLd(content) {
+  if (!content) {
+    return {
+      valid: false,
+      error: 'Empty JSON-LD block.',
+    };
+  }
+
+  try {
+    JSON.parse(content);
+    return { valid: true };
+  } catch (error) {
+    return {
+      valid: false,
+      error: error.message,
+    };
+  }
+}
+
+function buildRawData({
+  finalUrl,
+  response,
+  redirects,
+  loadTime,
+  page,
+  robotsAudit,
+  linkAudit,
+  resourceAudit,
+  compressionAudit,
+  tlsAudit,
+}) {
+  return {
+    status: response.status,
+    finalUrl,
+    redirects,
+    loadTime,
+    contentType: getHeader(response.headers, 'content-type') || 'Not specified',
+    title: page.title,
+    description: page.description,
+    h1: page.h1.map((heading) => heading.text),
+    headings: page.headings.length,
+    wordCount: page.wordCount,
+    htmlSize: formatBytes(page.htmlSizeBytes),
+    images: page.images.length,
+    imagesWithoutAlt: page.images.filter((image) => !image.hasAlt).length,
+    imagesWithEmptyAlt: page.images.filter(
+      (image) => image.hasAlt && image.alt.trim() === '',
+    ).length,
+    imagesWithoutDimensions: page.images.filter(
+      (image) => !image.hasWidth || !image.hasHeight,
+    ).length,
+    internalLinks: page.internalLinks,
+    externalLinks: page.externalLinks,
+    checkedLinks: linkAudit.checked,
+    brokenLinks: linkAudit.broken.length,
+    scripts: page.scripts.length,
+    stylesheets: page.stylesheets.length,
+    checkedResources: resourceAudit.checkedResources,
+    cacheIssues: resourceAudit.cacheIssues.length,
+    heavyImages: resourceAudit.heavyImages.length,
+    canonical: page.canonical,
+    robots: page.robots,
+    robotsTxt: robotsAudit.robots,
+    sitemap: robotsAudit.sitemap,
+    viewport: page.viewport,
+    favicon: page.favicon,
+    htmlLang: page.htmlLang,
+    charset: page.charset,
+    og: {
+      title: page.ogTitle,
+      description: page.ogDescription,
+      image: page.ogImage?.value || null,
+    },
+    twitter: page.twitter,
+    jsonLd: page.jsonLdScripts.length,
+    hreflang: page.hreflangTags.length,
+    compression: compressionAudit.encoding,
+    tlsDaysLeft: tlsAudit.daysLeft,
+  };
+}
+
+function buildSummary(insights) {
+  const counts = insights.reduce(
+    (acc, insight) => {
+      acc[insight.level] += 1;
+      return acc;
+    },
+    { success: 0, warning: 0, danger: 0, info: 0 },
+  );
+  const score = Math.max(
+    0,
+    Math.min(
+      100,
+      100 - counts.danger * 12 - counts.warning * 5 - counts.info,
+    ),
+  );
+
+  return {
+    ...counts,
+    score,
+    total: insights.length,
+  };
+}
+
+function addInsight(insights, level, category, title, text, details = []) {
+  insights.push({
+    level,
+    category,
+    title,
+    text,
+    details: details.filter(Boolean),
+  });
+}
+
+function findSkippedHeadingLevels(headings) {
+  const skipped = [];
+  let previousLevel = null;
+
+  headings.forEach((heading) => {
+    if (previousLevel !== null && heading.level > previousLevel + 1) {
+      skipped.push('H' + previousLevel + ' -> H' + heading.level);
+    }
+    previousLevel = heading.level;
+  });
+
+  return skipped;
+}
+
+function getHeader(headers, name) {
+  if (!headers) return '';
+  const lowerName = name.toLowerCase();
+  return headers[lowerName] || headers[name] || '';
+}
+
+function normalizeSetCookie(value) {
+  if (!value) return [];
+  return Array.isArray(value) ? value : [value];
+}
+
+function getMaxAgeSeconds(cacheControl) {
+  const match = cacheControl.match(/(?:s-maxage|max-age)=(\d+)/i);
+  return match ? Number(match[1]) : null;
+}
+
+function isRedirect(status) {
+  return status >= 300 && status < 400;
+}
+
+function toAbsoluteHttpUrl(value, baseUrl) {
+  if (!value) return null;
+  const trimmed = value.trim();
+  if (
+    !trimmed ||
+    trimmed.startsWith('#') ||
+    /^(mailto|tel|sms|javascript|data|blob):/i.test(trimmed)
+  ) {
+    return null;
+  }
+
+  try {
+    const url = new URL(trimmed, baseUrl);
+    if (!['http:', 'https:'].includes(url.protocol)) {
+      return null;
+    }
+    return url.href;
+  } catch (error) {
+    return null;
+  }
+}
+
+function sameSite(leftUrl, rightUrl) {
+  try {
+    const left = new URL(leftUrl);
+    const right = new URL(rightUrl);
+    return normalizeHost(left.hostname) === normalizeHost(right.hostname);
+  } catch (error) {
+    return false;
+  }
+}
+
+function normalizeHost(hostname) {
+  return hostname.toLowerCase().replace(/^www\./, '');
+}
+
+function stripHash(url) {
+  try {
+    const parsed = new URL(url);
+    parsed.hash = '';
+    return parsed.href;
+  } catch (error) {
+    return url;
+  }
+}
+
+function cleanText(value) {
+  return (value || '').replace(/\s+/g, ' ').trim();
+}
+
+function getAccessibleText($, element) {
+  const text = cleanText($(element).text());
+  if (text) return text;
+
+  const aria = $(element).attr('aria-label');
+  if (aria) return cleanText(aria);
+
+  const title = $(element).attr('title');
+  if (title) return cleanText(title);
+
+  const imageAlt = $(element).find('img[alt]').first().attr('alt');
+  if (imageAlt) return cleanText(imageAlt);
+
+  return '';
+}
+
+function countWords(text) {
+  if (!text) return 0;
+  const words = text.match(/[A-Za-zА-Яа-яЁё0-9]+/g);
+  return words ? words.length : 0;
+}
+
+function isGenericTitle(title) {
+  const normalized = normalizeTextForCompare(title);
+  return [
+    'home',
+    'homepage',
+    'main',
+    'index',
+    'untitled',
+    'document',
+    'welcome',
+  ].includes(normalized);
+}
+
+function normalizeTextForCompare(value) {
+  return cleanText(value)
+    .toLowerCase()
+    .replace(/[|:—–-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function isValidHreflang(value) {
+  return /^(x-default|[a-z]{2,3}(-[a-z0-9]{2,8})*)$/i.test(value || '');
+}
+
+function formatBytes(bytes) {
+  if (!bytes) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  let value = bytes;
+  let unitIndex = 0;
+
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+
+  return value.toFixed(value >= 10 || unitIndex === 0 ? 0 : 1) + ' ' + units[unitIndex];
+}
+
+function parseCssDeclarations(value) {
+  return value.split(';').reduce((acc, declaration) => {
+    const colonIndex = declaration.indexOf(':');
+    if (colonIndex === -1) return acc;
+    const property = declaration.slice(0, colonIndex).trim().toLowerCase();
+    const propertyValue = declaration.slice(colonIndex + 1).trim();
+    if (property) {
+      acc[property] = propertyValue;
+    }
+    return acc;
+  }, {});
+}
+
+function colorPairFromDeclarations(declarations) {
+  const foreground = parseColor(declarations.color);
+  const background = parseColor(
+    declarations['background-color'] || declarations.background,
+  );
+
+  if (!foreground || !background) {
+    return null;
+  }
+
+  return { foreground, background };
+}
+
+function parseColor(value) {
+  if (!value) return null;
+  const color = value.trim().toLowerCase();
+  const named = {
+    black: [0, 0, 0],
+    white: [255, 255, 255],
+    red: [255, 0, 0],
+    green: [0, 128, 0],
+    blue: [0, 0, 255],
+    gray: [128, 128, 128],
+    grey: [128, 128, 128],
+    transparent: null,
+  };
+
+  if (Object.prototype.hasOwnProperty.call(named, color)) {
+    return named[color];
+  }
+
+  const hex = color.match(/^#([0-9a-f]{3}|[0-9a-f]{6})\b/i);
+  if (hex) {
+    const raw = hex[1];
+    const expanded =
+      raw.length === 3
+        ? raw
+            .split('')
+            .map((char) => char + char)
+            .join('')
+        : raw;
+    return [
+      parseInt(expanded.slice(0, 2), 16),
+      parseInt(expanded.slice(2, 4), 16),
+      parseInt(expanded.slice(4, 6), 16),
+    ];
+  }
+
+  const rgb = color.match(/^rgba?\(([^)]+)\)/);
+  if (rgb) {
+    const parts = rgb[1]
+      .split(',')
+      .slice(0, 3)
+      .map((part) => Number(part.trim()));
+    if (parts.every((part) => Number.isFinite(part))) {
+      return parts;
+    }
+  }
+
+  return null;
+}
+
+function calculateContrastRatio(foreground, background) {
+  const light = Math.max(relativeLuminance(foreground), relativeLuminance(background));
+  const dark = Math.min(relativeLuminance(foreground), relativeLuminance(background));
+  return (light + 0.05) / (dark + 0.05);
+}
+
+function relativeLuminance(rgb) {
+  const [r, g, b] = rgb.map((channel) => {
+    const value = channel / 255;
+    return value <= 0.03928
+      ? value / 12.92
+      : Math.pow((value + 0.055) / 1.055, 2.4);
+  });
+
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+function cssEscape(value) {
+  return String(value).replace(/["\\]/g, '\\$&');
+}
+
+function simplifyError(error) {
+  if (error.response) {
+    return 'HTTP ' + error.response.status;
+  }
+  if (error.code) {
+    return error.code;
+  }
+  return error.message || 'Unknown error';
+}
+
+async function mapLimit(items, limit, mapper) {
+  if (items.length === 0) {
+    return [];
+  }
+
+  const results = new Array(items.length);
+  let index = 0;
+  const workers = new Array(Math.min(limit, items.length)).fill(null).map(async () => {
+    while (index < items.length) {
+      const currentIndex = index;
+      index += 1;
+      results[currentIndex] = await mapper(items[currentIndex], currentIndex);
+    }
+  });
+
+  await Promise.all(workers);
+  return results;
+}
+
+function uniqueBy(items, getKey) {
+  const seen = new Set();
+  const unique = [];
+
+  items.forEach((item) => {
+    const key = getKey(item);
+    if (!key || seen.has(key)) {
+      return;
+    }
+    seen.add(key);
+    unique.push(item);
+  });
+
+  return unique;
+}
+
+module.exports = {
+  runAudit,
+  normalizeUrl,
+};
