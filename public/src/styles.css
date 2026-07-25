@@ -433,6 +433,418 @@ html[data-theme="light"] #owner-explain-btn.owner-explain-btn {
   box-shadow: 0 1px 2px rgb(0 0 0 / 0.08);
 }
 
+#owner-explain-copy {
+  background: var(--primary) !important;
+  color: var(--primary-foreground) !important;
+  border: 1px solid transparent;
+}
+
+#owner-explain-copy:hover {
+  opacity: 0.92;
+  background: var(--primary) !important;
+  color: var(--primary-foreground) !important;
+}
+
+/* ---------- Report bento layout ---------- */
+.report-page {
+  padding-top: 4.5rem;
+}
+
+.bento {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (min-width: 768px) {
+  .bento {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1024px) {
+  .bento {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+}
+
+.bento-cell {
+  border: 1px solid var(--border);
+  background: var(--card);
+  border-radius: calc(var(--radius) + 4px);
+  padding: 1rem 1.1rem;
+  min-height: 5.5rem;
+}
+
+button.bento-filter {
+  display: block;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  position: relative;
+  transform: translateY(0);
+  border: none;
+  box-shadow:
+    0 1px 0 color-mix(in oklab, var(--foreground) 6%, transparent),
+    0 6px 14px -8px color-mix(in oklab, #000 55%, transparent),
+    0 14px 28px -16px color-mix(in oklab, #000 45%, transparent);
+  transition:
+    background-color 0.15s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+}
+
+button.bento-filter:hover {
+  transform: translateY(-3px);
+  box-shadow:
+    0 1px 0 color-mix(in oklab, var(--foreground) 8%, transparent),
+    0 10px 20px -10px color-mix(in oklab, #000 60%, transparent),
+    0 22px 36px -18px color-mix(in oklab, #000 50%, transparent);
+}
+
+button.bento-filter:active {
+  transform: translateY(1px);
+  box-shadow:
+    0 1px 0 color-mix(in oklab, var(--foreground) 4%, transparent),
+    0 3px 8px -6px color-mix(in oklab, #000 50%, transparent),
+    0 8px 14px -12px color-mix(in oklab, #000 40%, transparent);
+}
+
+button.bento-filter:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+button.bento-filter.is-active {
+  transform: translateY(1px);
+  box-shadow:
+    inset 0 2px 6px color-mix(in oklab, #000 28%, transparent),
+    0 2px 6px -4px color-mix(in oklab, #000 40%, transparent);
+}
+
+button.bento-filter[data-level-filter="danger"] {
+  background: color-mix(in oklab, #ef4444 16%, var(--card));
+  box-shadow:
+    0 1px 0 color-mix(in oklab, #ef4444 18%, transparent),
+    0 6px 14px -8px color-mix(in oklab, #ef4444 35%, transparent),
+    0 14px 28px -16px color-mix(in oklab, #000 40%, transparent);
+}
+
+button.bento-filter[data-level-filter="danger"]:hover {
+  background: color-mix(in oklab, #ef4444 22%, var(--card));
+  box-shadow:
+    0 1px 0 color-mix(in oklab, #ef4444 24%, transparent),
+    0 10px 20px -10px color-mix(in oklab, #ef4444 40%, transparent),
+    0 22px 36px -18px color-mix(in oklab, #000 45%, transparent);
+}
+
+button.bento-filter[data-level-filter="danger"].is-active {
+  background: color-mix(in oklab, #ef4444 26%, var(--card));
+  box-shadow:
+    inset 0 2px 8px color-mix(in oklab, #ef4444 22%, transparent),
+    0 2px 8px -4px color-mix(in oklab, #ef4444 30%, transparent);
+}
+
+button.bento-filter[data-level-filter="warning"] {
+  background: color-mix(in oklab, #f59e0b 16%, var(--card));
+  box-shadow:
+    0 1px 0 color-mix(in oklab, #f59e0b 18%, transparent),
+    0 6px 14px -8px color-mix(in oklab, #f59e0b 32%, transparent),
+    0 14px 28px -16px color-mix(in oklab, #000 40%, transparent);
+}
+
+button.bento-filter[data-level-filter="warning"]:hover {
+  background: color-mix(in oklab, #f59e0b 22%, var(--card));
+  box-shadow:
+    0 1px 0 color-mix(in oklab, #f59e0b 24%, transparent),
+    0 10px 20px -10px color-mix(in oklab, #f59e0b 38%, transparent),
+    0 22px 36px -18px color-mix(in oklab, #000 45%, transparent);
+}
+
+button.bento-filter[data-level-filter="warning"].is-active {
+  background: color-mix(in oklab, #f59e0b 26%, var(--card));
+  box-shadow:
+    inset 0 2px 8px color-mix(in oklab, #f59e0b 22%, transparent),
+    0 2px 8px -4px color-mix(in oklab, #f59e0b 28%, transparent);
+}
+
+button.bento-filter[data-level-filter="success"] {
+  background: color-mix(in oklab, #34d399 16%, var(--card));
+  box-shadow:
+    0 1px 0 color-mix(in oklab, #34d399 18%, transparent),
+    0 6px 14px -8px color-mix(in oklab, #34d399 32%, transparent),
+    0 14px 28px -16px color-mix(in oklab, #000 40%, transparent);
+}
+
+button.bento-filter[data-level-filter="success"]:hover {
+  background: color-mix(in oklab, #34d399 22%, var(--card));
+  box-shadow:
+    0 1px 0 color-mix(in oklab, #34d399 24%, transparent),
+    0 10px 20px -10px color-mix(in oklab, #34d399 38%, transparent),
+    0 22px 36px -18px color-mix(in oklab, #000 45%, transparent);
+}
+
+button.bento-filter[data-level-filter="success"].is-active {
+  background: color-mix(in oklab, #34d399 26%, var(--card));
+  box-shadow:
+    inset 0 2px 8px color-mix(in oklab, #34d399 22%, transparent),
+    0 2px 8px -4px color-mix(in oklab, #34d399 28%, transparent);
+}
+
+html[data-theme="light"] button.bento-filter[data-level-filter="danger"] {
+  background: color-mix(in oklab, #ef4444 11%, #fff);
+}
+html[data-theme="light"] button.bento-filter[data-level-filter="danger"]:hover,
+html[data-theme="light"] button.bento-filter[data-level-filter="danger"].is-active {
+  background: color-mix(in oklab, #ef4444 18%, #fff);
+}
+
+html[data-theme="light"] button.bento-filter[data-level-filter="warning"] {
+  background: color-mix(in oklab, #f59e0b 12%, #fff);
+}
+html[data-theme="light"] button.bento-filter[data-level-filter="warning"]:hover,
+html[data-theme="light"] button.bento-filter[data-level-filter="warning"].is-active {
+  background: color-mix(in oklab, #f59e0b 20%, #fff);
+}
+
+html[data-theme="light"] button.bento-filter[data-level-filter="success"] {
+  background: color-mix(in oklab, #34d399 12%, #fff);
+}
+html[data-theme="light"] button.bento-filter[data-level-filter="success"]:hover,
+html[data-theme="light"] button.bento-filter[data-level-filter="success"].is-active {
+  background: color-mix(in oklab, #34d399 20%, #fff);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button.bento-filter,
+  button.bento-filter:hover,
+  button.bento-filter:active,
+  button.bento-filter.is-active {
+    transition: none;
+    transform: none;
+  }
+}
+
+.bento-perf {
+  grid-column: span 2;
+}
+
+.bento-page {
+  grid-column: span 2;
+}
+
+.bento-vitals {
+  grid-column: 1 / -1;
+}
+
+@media (min-width: 1024px) {
+  .bento-page {
+    grid-column: span 3;
+  }
+  .bento-perf {
+    grid-column: span 2;
+  }
+}
+
+.bento-label {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--muted-foreground);
+}
+
+.bento-num {
+  margin: 0.55rem 0 0;
+  font-size: 1.75rem;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  color: var(--foreground);
+  line-height: 1.1;
+}
+
+.bento-unit {
+  margin-left: 0.15rem;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--muted-foreground);
+}
+
+.bento-hint {
+  margin: 0.65rem 0 0;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: var(--muted-foreground);
+}
+
+.bento-grade {
+  margin: 0;
+  font-size: 1.75rem;
+  font-weight: 600;
+  color: var(--foreground);
+}
+
+.bento-vitals-grid {
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (min-width: 640px) {
+  .bento-vitals-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
+
+.vital-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  border: none;
+  border-radius: var(--radius);
+  background: var(--card);
+  padding: 0.75rem;
+  text-align: left;
+  cursor: pointer;
+  transform: translateY(0);
+  box-shadow:
+    0 1px 0 color-mix(in oklab, var(--foreground) 6%, transparent),
+    0 6px 14px -8px color-mix(in oklab, #000 55%, transparent),
+    0 14px 28px -16px color-mix(in oklab, #000 45%, transparent);
+  transition:
+    background-color 0.15s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+}
+
+.vital-card:hover {
+  transform: translateY(-3px);
+  box-shadow:
+    0 1px 0 color-mix(in oklab, var(--foreground) 8%, transparent),
+    0 10px 20px -10px color-mix(in oklab, #000 60%, transparent),
+    0 22px 36px -18px color-mix(in oklab, #000 50%, transparent);
+}
+
+.vital-card:active {
+  transform: translateY(1px);
+  box-shadow:
+    0 1px 0 color-mix(in oklab, var(--foreground) 4%, transparent),
+    0 3px 8px -6px color-mix(in oklab, #000 50%, transparent),
+    0 8px 14px -12px color-mix(in oklab, #000 40%, transparent);
+}
+
+.vital-key {
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--muted-foreground);
+}
+
+.vital-val {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--foreground);
+}
+
+.vital-status {
+  font-size: 0.7rem;
+  color: var(--muted-foreground);
+}
+
+.bento-vital-good {
+  background: color-mix(in oklab, #34d399 16%, var(--card));
+  box-shadow:
+    0 1px 0 color-mix(in oklab, #34d399 18%, transparent),
+    0 6px 14px -8px color-mix(in oklab, #34d399 32%, transparent),
+    0 14px 28px -16px color-mix(in oklab, #000 40%, transparent);
+}
+
+.bento-vital-good:hover {
+  background: color-mix(in oklab, #34d399 22%, var(--card));
+  box-shadow:
+    0 1px 0 color-mix(in oklab, #34d399 24%, transparent),
+    0 10px 20px -10px color-mix(in oklab, #34d399 38%, transparent),
+    0 22px 36px -18px color-mix(in oklab, #000 45%, transparent);
+}
+
+.bento-vital-mid {
+  background: color-mix(in oklab, #f59e0b 16%, var(--card));
+  box-shadow:
+    0 1px 0 color-mix(in oklab, #f59e0b 18%, transparent),
+    0 6px 14px -8px color-mix(in oklab, #f59e0b 32%, transparent),
+    0 14px 28px -16px color-mix(in oklab, #000 40%, transparent);
+}
+
+.bento-vital-mid:hover {
+  background: color-mix(in oklab, #f59e0b 22%, var(--card));
+  box-shadow:
+    0 1px 0 color-mix(in oklab, #f59e0b 24%, transparent),
+    0 10px 20px -10px color-mix(in oklab, #f59e0b 38%, transparent),
+    0 22px 36px -18px color-mix(in oklab, #000 45%, transparent);
+}
+
+.bento-vital-bad {
+  background: color-mix(in oklab, #ef4444 16%, var(--card));
+  box-shadow:
+    0 1px 0 color-mix(in oklab, #ef4444 18%, transparent),
+    0 6px 14px -8px color-mix(in oklab, #ef4444 35%, transparent),
+    0 14px 28px -16px color-mix(in oklab, #000 40%, transparent);
+}
+
+.bento-vital-bad:hover {
+  background: color-mix(in oklab, #ef4444 22%, var(--card));
+  box-shadow:
+    0 1px 0 color-mix(in oklab, #ef4444 24%, transparent),
+    0 10px 20px -10px color-mix(in oklab, #ef4444 40%, transparent),
+    0 22px 36px -18px color-mix(in oklab, #000 45%, transparent);
+}
+
+html[data-theme="light"] .bento-vital-good {
+  background: color-mix(in oklab, #34d399 12%, #fff);
+}
+html[data-theme="light"] .bento-vital-good:hover {
+  background: color-mix(in oklab, #34d399 18%, #fff);
+}
+html[data-theme="light"] .bento-vital-mid {
+  background: color-mix(in oklab, #f59e0b 12%, #fff);
+}
+html[data-theme="light"] .bento-vital-mid:hover {
+  background: color-mix(in oklab, #f59e0b 18%, #fff);
+}
+html[data-theme="light"] .bento-vital-bad {
+  background: color-mix(in oklab, #ef4444 11%, #fff);
+}
+html[data-theme="light"] .bento-vital-bad:hover {
+  background: color-mix(in oklab, #ef4444 18%, #fff);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vital-card,
+  .vital-card:hover,
+  .vital-card:active {
+    transition: none;
+    transform: none;
+  }
+}
+
+.bento-accordion {
+  padding: 0 !important;
+  min-height: 0;
+}
+
+.report-page details > summary::-webkit-details-marker {
+  display: none;
+}
+
+.report-page details[open] > summary {
+  color: var(--foreground);
+}
+
+.report-page details[open] > summary .details-chevron {
+  transform: rotate(180deg);
+}
+
 
 /* Form / card polish */
 #audit-form,
@@ -488,11 +900,6 @@ input[type="url"]:focus {
 
 .vital-card {
   border-radius: var(--radius) !important;
-  transition: background-color 0.15s ease, border-color 0.15s ease;
-}
-
-.vital-card:hover {
-  background: color-mix(in oklab, var(--accent) 70%, transparent) !important;
 }
 
 #vital-modal > div,

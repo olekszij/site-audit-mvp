@@ -223,6 +223,8 @@ async function runAudit(targetUrl) {
     robotsAudit,
     canonicalAudit,
     ogImageAudit,
+    twitterImageAudit,
+    faviconAudit,
     linkAudit,
     resourceAudit,
     compressionAudit,
@@ -234,6 +236,12 @@ async function runAudit(targetUrl) {
       : Promise.resolve(null),
     page.ogImage
       ? inspectUrl(page.ogImage.absoluteUrl, 'image/*,*/*')
+      : Promise.resolve(null),
+    page.twitter.image
+      ? inspectUrl(page.twitter.image.absoluteUrl, 'image/*,*/*')
+      : Promise.resolve(null),
+    page.favicon.absoluteUrl
+      ? inspectUrl(page.favicon.absoluteUrl, 'image/*,*/*')
       : Promise.resolve(null),
     auditLinks(page.links),
     auditResources(page),
@@ -249,6 +257,8 @@ async function runAudit(targetUrl) {
     robotsAudit,
     canonicalAudit,
     ogImageAudit,
+    twitterImageAudit,
+    faviconAudit,
     linkAudit,
     resourceAudit,
     compressionAudit,
@@ -331,9 +341,38 @@ function collectPageData($, baseUrl, html) {
     $('meta[charset]').first().attr('charset') ||
     $('meta[http-equiv="content-type"]').first().attr('content') ||
     null;
-  const favicon =
-    $('link[rel="icon"], link[rel="shortcut icon"], link[rel="apple-touch-icon"]')
-      .length > 0;
+  const faviconHref =
+    $('link[rel="icon"], link[rel="shortcut icon"]').first().attr('href') ||
+    null;
+  const faviconAbsolute =
+    toAbsoluteHttpUrl(faviconHref, baseUrl) ||
+    toAbsoluteHttpUrl('/favicon.ico', baseUrl);
+  const favicon = {
+    declared: Boolean(faviconHref),
+    href: faviconHref,
+    absoluteUrl: faviconAbsolute,
+  };
+
+  const appleTouchHref =
+    $('link[rel="apple-touch-icon"]').first().attr('href') || null;
+  const appleTouchIcon = {
+    declared: Boolean(appleTouchHref),
+    href: appleTouchHref,
+    absoluteUrl: toAbsoluteHttpUrl(appleTouchHref, baseUrl),
+  };
+
+  const hasDoctype = /^\s*<!doctype\s+html/i.test(html || '');
+  const metaRefresh =
+    $('meta[http-equiv="refresh"]').first().attr('content') || null;
+  const manifestHref =
+    $('link[rel="manifest"]').first().attr('href') || null;
+  const manifest = {
+    declared: Boolean(manifestHref),
+    href: manifestHref,
+    absoluteUrl: toAbsoluteHttpUrl(manifestHref, baseUrl),
+  };
+  const themeColor =
+    $('meta[name="theme-color"]').first().attr('content') || null;
 
   const headings = [];
   $('h1,h2,h3,h4,h5,h6').each((index, element) => {
@@ -353,10 +392,16 @@ function collectPageData($, baseUrl, html) {
       return;
     }
 
+    const rel = ($(element).attr('rel') || '').toLowerCase();
+    const target = ($(element).attr('target') || '').trim().toLowerCase();
+
     links.push({
       href,
       absoluteUrl: stripHash(absoluteUrl),
       text: getAccessibleText($, element),
+      target,
+      rel,
+      relTokens: rel.split(/\s+/).filter(Boolean),
     });
   });
 
@@ -368,8 +413,14 @@ function collectPageData($, baseUrl, html) {
       $(element).attr('data-src') ||
       $(element).attr('data-lazy-src') ||
       '';
+    const srcset =
+      $(element).attr('srcset') ||
+      $(element).attr('data-srcset') ||
+      '';
     images.push({
       src,
+      srcset,
+      sizes: $(element).attr('sizes') || '',
       absoluteUrl: toAbsoluteHttpUrl(src, baseUrl),
       hasAlt: alt !== undefined,
       alt: alt || '',
@@ -380,26 +431,59 @@ function collectPageData($, baseUrl, html) {
     });
   });
 
+  const pictureModern = [];
+  $('picture source[type], picture source[srcset]').each((index, element) => {
+    const type = ($(element).attr('type') || '').toLowerCase();
+    const srcset = $(element).attr('srcset') || '';
+    pictureModern.push({ type, srcset });
+  });
+
   const scripts = [];
   $('script[src]').each((index, element) => {
     const src = $(element).attr('src') || '';
     const absoluteUrl = toAbsoluteHttpUrl(src, baseUrl);
     if (absoluteUrl) {
-      scripts.push({ src, absoluteUrl });
+      const type = ($(element).attr('type') || '').toLowerCase();
+      scripts.push({
+        src,
+        absoluteUrl,
+        async: $(element).attr('async') !== undefined,
+        defer: $(element).attr('defer') !== undefined,
+        type,
+        integrity: ($(element).attr('integrity') || '').trim(),
+        isModule: type === 'module',
+      });
     }
   });
 
   const stylesheets = [];
+  const resourceHints = [];
   $('link[href]').each((index, element) => {
     const rel = ($(element).attr('rel') || '').toLowerCase();
-    if (!rel.split(/\s+/).includes('stylesheet')) {
-      return;
-    }
-
+    const relTokens = rel.split(/\s+/).filter(Boolean);
     const href = $(element).attr('href') || '';
     const absoluteUrl = toAbsoluteHttpUrl(href, baseUrl);
-    if (absoluteUrl) {
-      stylesheets.push({ href, absoluteUrl });
+
+    if (relTokens.includes('stylesheet') && absoluteUrl) {
+      stylesheets.push({
+        href,
+        absoluteUrl,
+        integrity: ($(element).attr('integrity') || '').trim(),
+      });
+    }
+
+    if (
+      absoluteUrl &&
+      (relTokens.includes('preconnect') ||
+        relTokens.includes('dns-prefetch') ||
+        relTokens.includes('preload') ||
+        relTokens.includes('prefetch'))
+    ) {
+      resourceHints.push({
+        rel: relTokens.join(' '),
+        href,
+        absoluteUrl,
+      });
     }
   });
 
@@ -425,12 +509,19 @@ function collectPageData($, baseUrl, html) {
     $('meta[property="og:description"]').first().attr('content') || null;
   const ogImageValue =
     $('meta[property="og:image"]').first().attr('content') || null;
+  const twitterImageValue =
+    $('meta[name="twitter:image"]').first().attr('content') || null;
   const twitter = {
     card: $('meta[name="twitter:card"]').first().attr('content') || null,
     title: $('meta[name="twitter:title"]').first().attr('content') || null,
     description:
       $('meta[name="twitter:description"]').first().attr('content') || null,
-    image: $('meta[name="twitter:image"]').first().attr('content') || null,
+    image: twitterImageValue
+      ? {
+          value: twitterImageValue,
+          absoluteUrl: toAbsoluteHttpUrl(twitterImageValue, baseUrl),
+        }
+      : null,
   };
 
   const final = new URL(baseUrl);
@@ -440,6 +531,36 @@ function collectPageData($, baseUrl, html) {
   const externalLinks = links.length - internalLinks;
   const bodyText = cleanText($('body').text());
 
+  const hasMain =
+    $('main').length > 0 || $('[role="main"]').length > 0;
+
+  const skipLink = detectSkipLink($);
+  const autoplayMedia = [];
+  $('video[autoplay], audio[autoplay]').each((index, element) => {
+    const muted =
+      $(element).attr('muted') !== undefined ||
+      String($(element).attr('muted') || '').toLowerCase() === 'true';
+    if (!muted) {
+      const tag = (element.tagName || element.name || 'media').toLowerCase();
+      autoplayMedia.push({
+        tag,
+        src: $(element).attr('src') || $(element).find('source').first().attr('src') || '',
+      });
+    }
+  });
+
+  const iframes = [];
+  $('iframe').each((index, element) => {
+    const titleAttr = cleanText($(element).attr('title') || '');
+    const aria = cleanText($(element).attr('aria-label') || '');
+    iframes.push({
+      src: $(element).attr('src') || '',
+      hasAccessibleName: Boolean(titleAttr || aria),
+    });
+  });
+
+  const weakAnchors = collectWeakAnchors(links);
+
   return {
     title,
     description,
@@ -447,6 +568,16 @@ function collectPageData($, baseUrl, html) {
     canonical,
     robots,
     favicon,
+    appleTouchIcon,
+    hasDoctype,
+    metaRefresh,
+    manifest,
+    themeColor,
+    hasMain,
+    skipLink,
+    autoplayMedia,
+    iframes,
+    weakAnchors,
     htmlLang,
     charset,
     headings,
@@ -455,8 +586,10 @@ function collectPageData($, baseUrl, html) {
     internalLinks,
     externalLinks,
     images,
+    pictureModern,
     scripts,
     stylesheets,
+    resourceHints,
     hreflangTags,
     jsonLdScripts,
     ogTitle,
@@ -487,6 +620,8 @@ function buildInsights({
   robotsAudit,
   canonicalAudit,
   ogImageAudit,
+  twitterImageAudit,
+  faviconAudit,
   linkAudit,
   resourceAudit,
   compressionAudit,
@@ -598,10 +733,11 @@ function buildInsights({
   addTitleInsights(insights, page);
   addDescriptionInsights(insights, page.description);
   addHeadingInsights(insights, page);
-  addIndexingInsights(insights, page, robotsAudit);
-  addCanonicalInsights(insights, canonicalAudit);
+  addDocumentInsights(insights, page);
+  addIndexingInsights(insights, page, robotsAudit, finalUrl);
+  addCanonicalInsights(insights, canonicalAudit, finalUrl);
   addMediaInsights(insights, page, ogImageAudit, resourceAudit);
-  addSocialInsights(insights, page, ogImageAudit);
+  addSocialInsights(insights, page, twitterImageAudit);
   addContentInsights(insights, page);
   addPerformanceInsights(
     insights,
@@ -609,14 +745,183 @@ function buildInsights({
     page,
     resourceAudit,
     compressionAudit,
+    finalUrl,
   );
   addEstimatedPerformanceInsights(insights, performanceScore, coreWebVitals);
   addSecurityInsights(insights, response.headers, finalUrlObject, page, tlsAudit);
-  addAccessibilityInsights(insights, page);
-  addLinkInsights(insights, linkAudit);
+  addAccessibilityInsights(insights, page, faviconAudit);
+  addPwaBrandingInsights(insights, page);
+  addLandmarkInsights(insights, page);
+  addLinkInsights(insights, linkAudit, page);
   addInternationalInsights(insights, page);
 
   return insights;
+}
+
+function addDocumentInsights(insights, page) {
+  if (!page.hasDoctype) {
+    addInsight(
+      insights,
+      'warning',
+      'Technical',
+      'HTML doctype missing',
+      'Pages should start with <!DOCTYPE html> so browsers use standards mode.',
+    );
+  } else {
+    addInsight(
+      insights,
+      'success',
+      'Technical',
+      'HTML doctype present',
+      'Document declares an HTML doctype.',
+    );
+  }
+
+  if (page.metaRefresh) {
+    addInsight(
+      insights,
+      'warning',
+      'SEO',
+      'Meta refresh found',
+      'Meta refresh redirects are weaker for SEO and accessibility than HTTP redirects.',
+      [page.metaRefresh],
+    );
+  }
+}
+
+function addPwaBrandingInsights(insights, page) {
+  if (!page.manifest || !page.manifest.declared) {
+    addInsight(
+      insights,
+      'info',
+      'Mobile',
+      'Web app manifest missing',
+      'A manifest helps installability and home-screen icons on supporting browsers.',
+    );
+  } else {
+    addInsight(
+      insights,
+      'success',
+      'Mobile',
+      'Web app manifest linked',
+      'Found <link rel="manifest">.',
+      [page.manifest.absoluteUrl || page.manifest.href],
+    );
+  }
+
+  if (!page.themeColor) {
+    addInsight(
+      insights,
+      'info',
+      'Branding',
+      'theme-color missing',
+      'theme-color tints browser UI on mobile and improves brand consistency.',
+    );
+  } else {
+    addInsight(
+      insights,
+      'success',
+      'Branding',
+      'theme-color set',
+      'Browser chrome can use the declared brand color.',
+      [page.themeColor],
+    );
+  }
+
+  if (!page.appleTouchIcon || !page.appleTouchIcon.declared) {
+    addInsight(
+      insights,
+      'info',
+      'Branding',
+      'apple-touch-icon missing',
+      'iOS home-screen bookmarks look better with an apple-touch-icon.',
+    );
+  } else {
+    addInsight(
+      insights,
+      'success',
+      'Branding',
+      'apple-touch-icon found',
+      'Apple touch icon is linked.',
+      [page.appleTouchIcon.absoluteUrl || page.appleTouchIcon.href],
+    );
+  }
+}
+
+function addLandmarkInsights(insights, page) {
+  if (!page.skipLink || !page.skipLink.found) {
+    addInsight(
+      insights,
+      'warning',
+      'Accessibility',
+      'Skip link not found',
+      'A skip-to-content link near the top helps keyboard users bypass repeated chrome.',
+    );
+  } else {
+    addInsight(
+      insights,
+      'success',
+      'Accessibility',
+      'Skip link present',
+      'Early link looks like a skip/navigation bypass.',
+      [page.skipLink.href, page.skipLink.text].filter(Boolean),
+    );
+  }
+
+  if (!page.hasMain) {
+    addInsight(
+      insights,
+      'warning',
+      'Accessibility',
+      'Main landmark missing',
+      'Add <main> or role="main" so assistive tech can jump to primary content.',
+    );
+  } else {
+    addInsight(
+      insights,
+      'success',
+      'Accessibility',
+      'Main landmark present',
+      'Page exposes a main content landmark.',
+    );
+  }
+
+  if (page.autoplayMedia && page.autoplayMedia.length > 0) {
+    addInsight(
+      insights,
+      'warning',
+      'Accessibility',
+      'Autoplay media without muted',
+      'Autoplaying video/audio without muted can surprise users and fail accessibility expectations.',
+      page.autoplayMedia
+        .slice(0, 5)
+        .map((item) => item.tag + (item.src ? ': ' + item.src : '')),
+    );
+  }
+
+  const untitledIframes = (page.iframes || []).filter(
+    (frame) => !frame.hasAccessibleName,
+  );
+  if (untitledIframes.length > 0) {
+    addInsight(
+      insights,
+      'warning',
+      'Accessibility',
+      'Iframes missing accessible name',
+      'Each iframe needs a title or aria-label describing its purpose.',
+      untitledIframes
+        .slice(0, 5)
+        .map((frame) => frame.src || '(no src)'),
+    );
+  } else if ((page.iframes || []).length > 0) {
+    addInsight(
+      insights,
+      'success',
+      'Accessibility',
+      'Iframes have accessible names',
+      'Checked iframes include title or aria-label.',
+    );
+  }
 }
 
 function addTitleInsights(insights, page) {
@@ -773,7 +1078,7 @@ function addHeadingInsights(insights, page) {
   }
 }
 
-function addIndexingInsights(insights, page, robotsAudit) {
+function addIndexingInsights(insights, page, robotsAudit, finalUrl) {
   const robots = (page.robots || '').toLowerCase();
   if (robots.includes('noindex') || robots.includes('nofollow')) {
     addInsight(
@@ -837,6 +1142,47 @@ function addIndexingInsights(insights, page, robotsAudit) {
         : 'File is available but does not look like standard sitemap XML.',
       [robotsAudit.sitemap.url],
     );
+
+    if (robotsAudit.sitemap.containsPage === true) {
+      addInsight(
+        insights,
+        'success',
+        'Indexing',
+        'Sitemap includes checked URL',
+        'The audited page URL appears in a <loc> entry of the sitemap.',
+        [finalUrl],
+      );
+
+      const robotsLower = (page.robots || '').toLowerCase();
+      if (robotsLower.includes('noindex')) {
+        addInsight(
+          insights,
+          'warning',
+          'Indexing',
+          'noindex conflicts with sitemap',
+          'Page is listed in the sitemap but meta robots asks crawlers not to index it.',
+          [finalUrl, page.robots],
+        );
+      }
+    } else if (robotsAudit.sitemap.containsPage === false) {
+      addInsight(
+        insights,
+        'warning',
+        'Indexing',
+        'Checked URL missing from sitemap',
+        'Sitemap was found, but this page URL was not listed in checked sitemap files.',
+        [robotsAudit.sitemap.url, finalUrl],
+      );
+    } else if (robotsAudit.sitemap.isIndex) {
+      addInsight(
+        insights,
+        'info',
+        'Indexing',
+        'Sitemap is an index file',
+        'Found a sitemap index; page inclusion was not fully verified across all child sitemaps.',
+        [robotsAudit.sitemap.url],
+      );
+    }
   } else {
     addInsight(
       insights,
@@ -849,7 +1195,7 @@ function addIndexingInsights(insights, page, robotsAudit) {
   }
 }
 
-function addCanonicalInsights(insights, canonicalAudit) {
+function addCanonicalInsights(insights, canonicalAudit, finalUrl) {
   if (!canonicalAudit) {
     addInsight(
       insights,
@@ -905,13 +1251,31 @@ function addCanonicalInsights(insights, canonicalAudit) {
       'Canonical address must open without errors.',
       details,
     );
+  } else if (hostsDifferOnlyByWww(canonicalAudit.absoluteUrl, finalUrl)) {
+    addInsight(
+      insights,
+      'info',
+      'SEO',
+      'www and non-www hosts mixed',
+      'Canonical and page URL differ only by www. Prefer one host and redirect the other.',
+      details.concat(['Checked page: ' + finalUrl]),
+    );
+  } else if (!urlsLooselyEqual(canonicalAudit.absoluteUrl, finalUrl)) {
+    addInsight(
+      insights,
+      'info',
+      'SEO',
+      'Canonical points to a different URL',
+      'Canonical is reachable on the same domain but does not match the checked page URL. Fine for intentional consolidation.',
+      details.concat(['Checked page: ' + finalUrl]),
+    );
   } else {
     addInsight(
       insights,
       'success',
       'SEO',
       'Canonical configured correctly',
-      'Canonical URL is absolute, available and on same domain.',
+      'Canonical URL is absolute, available and matches this page.',
       details,
     );
   }
@@ -1036,7 +1400,7 @@ function addMediaInsights(insights, page, ogImageAudit, resourceAudit) {
   }
 }
 
-function addSocialInsights(insights, page) {
+function addSocialInsights(insights, page, twitterImageAudit) {
   const missingOg = [];
   if (!page.ogTitle) missingOg.push('og:title');
   if (!page.ogDescription) missingOg.push('og:description');
@@ -1085,6 +1449,34 @@ function addSocialInsights(insights, page) {
       'All main Twitter meta tags found.',
     );
   }
+
+  if (page.twitter.image && !page.twitter.image.absoluteUrl) {
+    addInsight(
+      insights,
+      'warning',
+      'Social',
+      'Twitter image specified incorrectly',
+      'Preview image must be accessible HTTP/HTTPS URL.',
+      [page.twitter.image.value],
+    );
+  } else if (page.twitter.image && twitterImageAudit && !twitterImageAudit.ok) {
+    addInsight(
+      insights,
+      'warning',
+      'Social',
+      'Twitter image unavailable',
+      'X/Twitter clients may not generate a card preview.',
+      [page.twitter.image.absoluteUrl],
+    );
+  } else if (page.twitter.image) {
+    addInsight(
+      insights,
+      'success',
+      'Social',
+      'Twitter image available',
+      'Twitter Card image opens without error.',
+    );
+  }
 }
 
 function addContentInsights(insights, page) {
@@ -1126,13 +1518,42 @@ function addContentInsights(insights, page) {
       invalidJsonLd.slice(0, 3).map((script) => script.error),
     );
   } else {
-    addInsight(
-      insights,
-      'success',
-      'SEO',
-      'JSON-LD valid',
-      'Structured data blocks found: ' + page.jsonLdScripts.length + '.',
+    const types = uniqueBy(
+      page.jsonLdScripts.flatMap((script) => script.types || []),
+      (type) => type,
     );
+    const knownTypes = types.filter((type) => KNOWN_SCHEMA_TYPES.has(type));
+    if (types.length === 0) {
+      addInsight(
+        insights,
+        'info',
+        'SEO',
+        'JSON-LD valid but missing @type',
+        'Blocks parse as JSON, but no recognizable schema.org @type was found.',
+        ['Structured data blocks: ' + page.jsonLdScripts.length],
+      );
+    } else if (knownTypes.length === 0) {
+      addInsight(
+        insights,
+        'info',
+        'SEO',
+        'JSON-LD uses uncommon @type',
+        'Structured data is valid. Consider common types like Organization, WebSite, Article or Product for richer results.',
+        types.slice(0, 8),
+      );
+    } else {
+      addInsight(
+        insights,
+        'success',
+        'SEO',
+        'JSON-LD valid',
+        'Structured data blocks found: ' +
+          page.jsonLdScripts.length +
+          '. Known types: ' +
+          knownTypes.slice(0, 6).join(', ') +
+          '.',
+      );
+    }
   }
 }
 
@@ -1142,6 +1563,7 @@ function addPerformanceInsights(
   page,
   resourceAudit,
   compressionAudit,
+  finalUrl,
 ) {
   if (loadTime > 5000) {
     addInsight(
@@ -1268,6 +1690,197 @@ function addPerformanceInsights(
       'Resources checked: ' + resourceAudit.checkedResources + '.',
     );
   }
+
+  addModernImageInsights(insights, page);
+  addScriptLoadingInsights(insights, page, finalUrl);
+  addResourceHintInsights(insights, page, finalUrl);
+}
+
+function addModernImageInsights(insights, page) {
+  if (page.images.length < 3) {
+    return;
+  }
+
+  const modernPattern = /\.(webp|avif)(?:$|\?|#)/i;
+  const hasModernSrc = page.images.some(
+    (image) =>
+      modernPattern.test(image.src || '') ||
+      modernPattern.test(image.srcset || '') ||
+      modernPattern.test(image.absoluteUrl || ''),
+  );
+  const hasModernPicture = (page.pictureModern || []).some(
+    (source) =>
+      /image\/(webp|avif)/i.test(source.type || '') ||
+      modernPattern.test(source.srcset || ''),
+  );
+  const withSrcset = page.images.filter((image) => (image.srcset || '').trim())
+    .length;
+
+  if (!hasModernSrc && !hasModernPicture) {
+    addInsight(
+      insights,
+      'info',
+      'Performance',
+      'No modern image formats detected',
+      'WebP/AVIF (or <picture> sources) usually shrink image weight versus JPEG/PNG alone.',
+      ['Images on page: ' + page.images.length],
+    );
+  } else {
+    addInsight(
+      insights,
+      'success',
+      'Performance',
+      'Modern image formats detected',
+      'Page references WebP/AVIF or modern <picture> sources.',
+    );
+  }
+
+  if (page.images.length >= 5 && withSrcset === 0) {
+    addInsight(
+      insights,
+      'info',
+      'Performance',
+      'Responsive images (srcset) missing',
+      'Multiple images without srcset/sizes may send oversized files to mobile devices.',
+      ['Images: ' + page.images.length],
+    );
+  } else if (withSrcset > 0) {
+    addInsight(
+      insights,
+      'success',
+      'Performance',
+      'Responsive images present',
+      'Images with srcset: ' + withSrcset + ' / ' + page.images.length + '.',
+    );
+  }
+}
+
+function addScriptLoadingInsights(insights, page, finalUrl) {
+  if (page.scripts.length === 0) {
+    return;
+  }
+
+  const blocking = page.scripts.filter(
+    (script) => !script.async && !script.defer && !script.isModule,
+  );
+  if (blocking.length >= 3) {
+    addInsight(
+      insights,
+      'warning',
+      'Performance',
+      'Many render-blocking scripts',
+      'External scripts without async/defer/type=module can delay first paint.',
+      [
+        'Blocking scripts: ' + blocking.length + ' / ' + page.scripts.length,
+        ...blocking.slice(0, 5).map((script) => script.absoluteUrl),
+      ],
+    );
+  } else if (page.scripts.length > 0) {
+    addInsight(
+      insights,
+      'success',
+      'Performance',
+      'Script loading looks non-blocking',
+      'Most external scripts use async, defer or module.',
+      ['Scripts: ' + page.scripts.length, 'Blocking: ' + blocking.length],
+    );
+  }
+
+  const externalWithoutSri = [
+    ...page.scripts
+      .filter(
+        (script) =>
+          !sameSite(script.absoluteUrl, finalUrl) && !script.integrity,
+      )
+      .map((script) => 'script: ' + script.absoluteUrl),
+    ...page.stylesheets
+      .filter(
+        (sheet) => !sameSite(sheet.absoluteUrl, finalUrl) && !sheet.integrity,
+      )
+      .map((sheet) => 'stylesheet: ' + sheet.absoluteUrl),
+  ];
+
+  if (externalWithoutSri.length > 0) {
+    addInsight(
+      insights,
+      'warning',
+      'Security',
+      'External assets missing SRI',
+      'Third-party scripts/stylesheets without integrity can be altered without your notice.',
+      externalWithoutSri.slice(0, 6),
+    );
+  } else if (
+    page.scripts.some((script) => !sameSite(script.absoluteUrl, finalUrl)) ||
+    page.stylesheets.some((sheet) => !sameSite(sheet.absoluteUrl, finalUrl))
+  ) {
+    addInsight(
+      insights,
+      'success',
+      'Security',
+      'External assets use SRI',
+      'Checked third-party script/link tags include integrity hashes.',
+    );
+  }
+}
+
+function addResourceHintInsights(insights, page, finalUrl) {
+  const pageHost = new URL(finalUrl).hostname.toLowerCase();
+  const thirdPartyHosts = new Set();
+  [...page.scripts, ...page.stylesheets, ...page.images]
+    .map((item) => item.absoluteUrl)
+    .filter(Boolean)
+    .forEach((url) => {
+      try {
+        const host = new URL(url).hostname.toLowerCase();
+        if (host && host !== pageHost && !host.endsWith('.' + pageHost)) {
+          thirdPartyHosts.add(host);
+        }
+      } catch (error) {
+        // ignore bad URLs
+      }
+    });
+
+  if (thirdPartyHosts.size === 0) {
+    return;
+  }
+
+  const hintedHosts = new Set();
+  (page.resourceHints || []).forEach((hint) => {
+    try {
+      hintedHosts.add(new URL(hint.absoluteUrl).hostname.toLowerCase());
+    } catch (error) {
+      // ignore
+    }
+  });
+
+  const missing = [...thirdPartyHosts].filter((host) => !hintedHosts.has(host));
+  if (missing.length > 0 && (page.resourceHints || []).length === 0) {
+    addInsight(
+      insights,
+      'info',
+      'Performance',
+      'No preconnect/dns-prefetch hints',
+      'Third-party hosts are loaded without resource hints that can warm up connections earlier.',
+      missing.slice(0, 6),
+    );
+  } else if (missing.length > 0) {
+    addInsight(
+      insights,
+      'info',
+      'Performance',
+      'Some third-party hosts lack resource hints',
+      'Consider preconnect or dns-prefetch for frequently used external origins.',
+      missing.slice(0, 6),
+    );
+  } else {
+    addInsight(
+      insights,
+      'success',
+      'Performance',
+      'Resource hints cover third-party hosts',
+      'preconnect/dns-prefetch/preload found for external origins used on the page.',
+    );
+  }
 }
 
 function addEstimatedPerformanceInsights(insights, performanceScore, coreWebVitals) {
@@ -1337,6 +1950,14 @@ function addSecurityInsights(insights, headers, finalUrlObject, page, tlsAudit) 
       name: 'x-frame-options',
       title: 'X-Frame-Options',
     },
+    {
+      name: 'permissions-policy',
+      title: 'Permissions-Policy',
+    },
+    {
+      name: 'cross-origin-opener-policy',
+      title: 'Cross-Origin-Opener-Policy',
+    },
   ];
 
   securityHeaders.forEach((header) => {
@@ -1375,6 +1996,30 @@ function addSecurityInsights(insights, headers, finalUrlObject, page, tlsAudit) 
       'Value: ' + value + '.',
     );
   });
+
+  const xssProtection = getHeader(headers, 'x-xss-protection');
+  if (xssProtection) {
+    const lower = xssProtection.toLowerCase();
+    if (lower.includes('0')) {
+      addInsight(
+        insights,
+        'info',
+        'Security',
+        'X-XSS-Protection disabled',
+        'Value 0 is acceptable; modern browsers rely on CSP instead of this legacy header.',
+        [xssProtection],
+      );
+    } else {
+      addInsight(
+        insights,
+        'info',
+        'Security',
+        'Deprecated X-XSS-Protection present',
+        'Prefer a strong Content-Security-Policy; X-XSS-Protection is legacy and inconsistently supported.',
+        [xssProtection],
+      );
+    }
+  }
 
   if (page.mixedContent.length > 0) {
     addInsight(
@@ -1502,7 +2147,7 @@ function addTlsInsights(insights, tlsAudit) {
   }
 }
 
-function addAccessibilityInsights(insights, page) {
+function addAccessibilityInsights(insights, page, faviconAudit) {
   if (!page.viewport) {
     addInsight(
       insights,
@@ -1512,16 +2157,43 @@ function addAccessibilityInsights(insights, page) {
       'Page may display incorrectly on smartphones.',
     );
   } else {
-    addInsight(
-      insights,
-      'success',
-      'Mobile',
-      'Viewport set',
-      'Page contains meta viewport.',
-    );
+    const viewport = page.viewport.toLowerCase();
+    const hasDeviceWidth = /width\s*=\s*device-width/.test(viewport);
+    const blocksZoom =
+      /user-scalable\s*=\s*(no|0)/.test(viewport) ||
+      /maximum-scale\s*=\s*1(?:\.0+)?(?:\s|,|$)/.test(viewport);
+
+    if (!hasDeviceWidth) {
+      addInsight(
+        insights,
+        'warning',
+        'Mobile',
+        'Viewport missing width=device-width',
+        'Meta viewport exists, but without width=device-width mobile layout often breaks.',
+        [page.viewport],
+      );
+    } else if (blocksZoom) {
+      addInsight(
+        insights,
+        'warning',
+        'Mobile',
+        'Viewport restricts zoom',
+        'user-scalable=no or maximum-scale=1 hurts accessibility for users who need zoom.',
+        [page.viewport],
+      );
+    } else {
+      addInsight(
+        insights,
+        'success',
+        'Mobile',
+        'Viewport set',
+        'Page contains a mobile-friendly meta viewport.',
+        [page.viewport],
+      );
+    }
   }
 
-  if (!page.favicon) {
+  if (!page.favicon || !page.favicon.absoluteUrl) {
     addInsight(
       insights,
       'warning',
@@ -1529,13 +2201,25 @@ function addAccessibilityInsights(insights, page) {
       'Favicon not found',
       'Without icon, site looks less complete in tabs and bookmarks.',
     );
+  } else if (faviconAudit && !faviconAudit.ok) {
+    addInsight(
+      insights,
+      'warning',
+      'Branding',
+      'Favicon unreachable',
+      'Icon URL is declared or expected, but does not respond successfully.',
+      [page.favicon.absoluteUrl],
+    );
   } else {
     addInsight(
       insights,
       'success',
       'Branding',
       'Favicon found',
-      'Site icon connected.',
+      page.favicon.declared
+        ? 'Site icon is linked and reachable.'
+        : 'Default /favicon.ico is reachable.',
+      [page.favicon.absoluteUrl],
     );
   }
 
@@ -1620,7 +2304,88 @@ function addAccessibilityInsights(insights, page) {
   }
 }
 
-function addLinkInsights(insights, linkAudit) {
+function addLinkInsights(insights, linkAudit, page) {
+  if (page.internalLinks === 0 && page.externalLinks > 0) {
+    addInsight(
+      insights,
+      'warning',
+      'Links',
+      'No internal links found',
+      'Page only links outward. Visitors and crawlers get weak in-site navigation from here.',
+      [
+        'Internal: ' + page.internalLinks,
+        'External: ' + page.externalLinks,
+      ],
+    );
+  } else if (
+    page.externalLinks > 10 &&
+    page.externalLinks > page.internalLinks * 3
+  ) {
+    addInsight(
+      insights,
+      'info',
+      'Links',
+      'Many more external than internal links',
+      'Outbound-heavy pages can dilute crawl focus; check that key internal paths are linked.',
+      [
+        'Internal: ' + page.internalLinks,
+        'External: ' + page.externalLinks,
+      ],
+    );
+  } else if (page.links.length > 0) {
+    addInsight(
+      insights,
+      'success',
+      'Links',
+      'Internal/external link mix looks balanced',
+      'Internal: ' +
+        page.internalLinks +
+        ', external: ' +
+        page.externalLinks +
+        '.',
+    );
+  }
+
+  const weakAnchors = page.weakAnchors || [];
+  if (weakAnchors.length >= 3) {
+    addInsight(
+      insights,
+      'info',
+      'SEO',
+      'Generic anchor text found',
+      'Vague link text like "click here" or raw URLs is weaker for SEO and accessibility.',
+      weakAnchors
+        .slice(0, 6)
+        .map((item) => '"' + item.text + '" -> ' + item.absoluteUrl),
+    );
+  }
+
+  const unsafeBlank = page.links.filter((link) => {
+    if (link.target !== '_blank') {
+      return false;
+    }
+    const tokens = link.relTokens || [];
+    return !tokens.includes('noopener') && !tokens.includes('noreferrer');
+  });
+  if (unsafeBlank.length > 0) {
+    addInsight(
+      insights,
+      'warning',
+      'Security',
+      'target=_blank without noopener',
+      'Links that open a new tab should use rel="noopener" or "noreferrer" to avoid tab-nabbing.',
+      unsafeBlank.slice(0, 6).map((link) => link.absoluteUrl),
+    );
+  } else if (page.links.some((link) => link.target === '_blank')) {
+    addInsight(
+      insights,
+      'success',
+      'Security',
+      'Blank-target links use noopener',
+      'Checked target=_blank links include noopener or noreferrer.',
+    );
+  }
+
   if (linkAudit.checked === 0) {
     addInsight(
       insights,
@@ -1859,11 +2624,16 @@ async function checkRobotsAndSitemap(finalUrl) {
   let foundSitemap = null;
   for (const sitemapUrl of sitemapCandidates) {
     const result = await fetchText(sitemapUrl);
+    const body = result.body || '';
+    const isIndex = /<sitemapindex[\s>]/i.test(body);
+    const validXml = /<(urlset|sitemapindex)[\s>]/i.test(body);
     const sitemapResult = {
       url: sitemapUrl,
       status: result.status,
       exists: result.status >= 200 && result.status < 400,
-      validXml: /<(urlset|sitemapindex)[\s>]/i.test(result.body || ''),
+      validXml,
+      isIndex,
+      body: sitemapResultBody(body),
     };
     checkedSitemaps.push(sitemapResult);
 
@@ -1872,15 +2642,84 @@ async function checkRobotsAndSitemap(finalUrl) {
     }
   }
 
+  let containsPage = null;
+  if (foundSitemap && foundSitemap.exists) {
+    containsPage = await sitemapContainsUrl(foundSitemap, finalUrl);
+  }
+
   return {
     robots: robotsData,
-    sitemap: foundSitemap || {
-      exists: false,
-      validXml: false,
-      url: sitemapCandidates[0],
-      checkedUrls: checkedSitemaps.map((item) => item.url),
-    },
+    sitemap: foundSitemap
+      ? {
+          exists: true,
+          validXml: foundSitemap.validXml,
+          isIndex: foundSitemap.isIndex,
+          url: foundSitemap.url,
+          containsPage,
+          checkedUrls: checkedSitemaps.map((item) => item.url),
+        }
+      : {
+          exists: false,
+          validXml: false,
+          isIndex: false,
+          url: sitemapCandidates[0],
+          containsPage: null,
+          checkedUrls: checkedSitemaps.map((item) => item.url),
+        },
   };
+}
+
+function sitemapResultBody(body) {
+  // Keep enough XML for loc matching without holding huge payloads forever.
+  return String(body || '').slice(0, 500000);
+}
+
+async function sitemapContainsUrl(sitemap, finalUrl) {
+  const candidates = collectSitemapLocUrls(sitemap.body || '');
+  if (sitemap.isIndex) {
+    const childUrls = candidates.slice(0, 3);
+    for (const childUrl of childUrls) {
+      const child = await fetchText(childUrl);
+      if (!(child.status >= 200 && child.status < 400)) {
+        continue;
+      }
+      const childLocs = collectSitemapLocUrls(child.body || '');
+      if (childLocs.some((loc) => urlsLooselyEqual(loc, finalUrl))) {
+        return true;
+      }
+    }
+    // Index found but page not in the first few children — unknown rather than hard miss.
+    return null;
+  }
+
+  if (candidates.length === 0) {
+    return null;
+  }
+
+  return candidates.some((loc) => urlsLooselyEqual(loc, finalUrl));
+}
+
+function collectSitemapLocUrls(xml) {
+  const urls = [];
+  const re = /<loc>\s*([^<]+?)\s*<\/loc>/gi;
+  let match = re.exec(xml);
+  while (match) {
+    const value = decodeXmlEntities(match[1].trim());
+    if (value) {
+      urls.push(value);
+    }
+    match = re.exec(xml);
+  }
+  return urls;
+}
+
+function decodeXmlEntities(value) {
+  return String(value || '')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'");
 }
 
 async function inspectCanonical(value, baseUrl) {
@@ -2266,17 +3105,105 @@ function parseJsonLd(content) {
     return {
       valid: false,
       error: 'Empty JSON-LD block.',
+      types: [],
     };
   }
 
   try {
-    JSON.parse(content);
-    return { valid: true };
+    const data = JSON.parse(content);
+    return { valid: true, types: extractJsonLdTypes(data) };
   } catch (error) {
     return {
       valid: false,
       error: error.message,
+      types: [],
     };
+  }
+}
+
+function extractJsonLdTypes(node, acc = []) {
+  if (!node) {
+    return acc;
+  }
+
+  if (Array.isArray(node)) {
+    node.forEach((item) => extractJsonLdTypes(item, acc));
+    return acc;
+  }
+
+  if (typeof node !== 'object') {
+    return acc;
+  }
+
+  if (node['@type']) {
+    const raw = node['@type'];
+    const list = Array.isArray(raw) ? raw : [raw];
+    list.forEach((type) => {
+      const cleaned = String(type || '')
+        .replace(/^https?:\/\/schema\.org\//i, '')
+        .trim();
+      if (cleaned) {
+        acc.push(cleaned);
+      }
+    });
+  }
+
+  if (node['@graph']) {
+    extractJsonLdTypes(node['@graph'], acc);
+  }
+
+  Object.keys(node).forEach((key) => {
+    if (key === '@type' || key === '@context') {
+      return;
+    }
+    const value = node[key];
+    if (value && typeof value === 'object') {
+      extractJsonLdTypes(value, acc);
+    }
+  });
+
+  return acc;
+}
+
+const KNOWN_SCHEMA_TYPES = new Set([
+  'Organization',
+  'WebSite',
+  'WebPage',
+  'Article',
+  'NewsArticle',
+  'BlogPosting',
+  'Product',
+  'BreadcrumbList',
+  'FAQPage',
+  'HowTo',
+  'LocalBusiness',
+  'Person',
+  'ImageObject',
+  'VideoObject',
+  'Event',
+  'Review',
+  'AggregateRating',
+  'ItemList',
+  'SearchAction',
+]);
+
+function urlsLooselyEqual(leftUrl, rightUrl) {
+  try {
+    const left = new URL(stripHash(leftUrl));
+    const right = new URL(stripHash(rightUrl));
+    const normalize = (url) => {
+      const path = url.pathname.replace(/\/+$/, '') || '/';
+      return (
+        url.protocol.toLowerCase() +
+        '//' +
+        url.host.toLowerCase() +
+        path +
+        url.search
+      );
+    };
+    return normalize(left) === normalize(right);
+  } catch (error) {
+    return false;
   }
 }
 
@@ -2326,7 +3253,8 @@ function buildRawData({
     robotsTxt: robotsAudit.robots,
     sitemap: robotsAudit.sitemap,
     viewport: page.viewport,
-    favicon: page.favicon,
+    favicon: Boolean(page.favicon && (page.favicon.declared || page.favicon.absoluteUrl)),
+    faviconUrl: page.favicon?.absoluteUrl || null,
     htmlLang: page.htmlLang,
     charset: page.charset,
     og: {
@@ -2473,6 +3401,82 @@ function getAccessibleText($, element) {
   if (imageAlt) return cleanText(imageAlt);
 
   return '';
+}
+
+function detectSkipLink($) {
+  const candidates = $('body a[href]').slice(0, 8).toArray();
+  for (let i = 0; i < candidates.length; i += 1) {
+    const el = candidates[i];
+    const href = (($(el).attr('href') || '')).trim().toLowerCase();
+    const text = normalizeTextForCompare(getAccessibleText($, el));
+    const looksLikeSkip =
+      text.includes('skip') ||
+      text.includes('пропуст') ||
+      text.includes('перейт') ||
+      text.includes('к содержан') ||
+      text.includes('да зместу') ||
+      href === '#main' ||
+      href === '#content' ||
+      href === '#main-content' ||
+      href.startsWith('#main') ||
+      href.startsWith('#content');
+    if (looksLikeSkip) {
+      return {
+        found: true,
+        href: $(el).attr('href') || '',
+        text: getAccessibleText($, el),
+      };
+    }
+  }
+  return { found: false, href: null, text: null };
+}
+
+const WEAK_ANCHOR_TEXTS = new Set([
+  'click here',
+  'here',
+  'read more',
+  'more',
+  'learn more',
+  'details',
+  'link',
+  'тут',
+  'сюда',
+  'далее',
+  'подробнее',
+  'читать далее',
+  'нажмите здесь',
+  'націсніце тут',
+  'падрабязней',
+  'чытаць далей',
+]);
+
+function collectWeakAnchors(links) {
+  const weak = [];
+  links.forEach((link) => {
+    const text = cleanText(link.text || '');
+    const normalized = normalizeTextForCompare(text);
+    const looksLikeUrl = /^https?:\/\//i.test(text) || /^www\./i.test(text);
+    if (WEAK_ANCHOR_TEXTS.has(normalized) || looksLikeUrl) {
+      weak.push({
+        text: text || link.href,
+        absoluteUrl: link.absoluteUrl,
+      });
+    }
+  });
+  return weak;
+}
+
+function hostsDifferOnlyByWww(leftUrl, rightUrl) {
+  try {
+    const left = new URL(leftUrl);
+    const right = new URL(rightUrl);
+    if (normalizeHost(left.hostname) !== normalizeHost(right.hostname)) {
+      return false;
+    }
+    return left.hostname.toLowerCase() !== right.hostname.toLowerCase();
+  } catch (error) {
+    return false;
+  }
 }
 
 function countWords(text) {
