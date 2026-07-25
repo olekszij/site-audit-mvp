@@ -4,9 +4,45 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Audit Report: <%= targetUrl %></title>
+    <script>
+        (function () {
+            try {
+                var savedTheme = localStorage.getItem('site-audit-theme');
+                var theme = savedTheme === 'light' || savedTheme === 'dark'
+                    ? savedTheme
+                    : (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+                document.documentElement.setAttribute('data-theme', theme);
+
+                var savedLang = localStorage.getItem('site-audit-lang');
+                var lang = savedLang === 'be' || savedLang === 'en' ? savedLang : 'en';
+                document.documentElement.setAttribute('data-lang', lang);
+                document.documentElement.setAttribute('lang', lang === 'be' ? 'be' : 'en');
+            } catch (e) {
+                document.documentElement.setAttribute('data-theme', 'dark');
+                document.documentElement.setAttribute('data-lang', 'en');
+            }
+        })();
+    </script>
     <link rel="stylesheet" href="/styles.css">
 </head>
 <body class="min-h-screen bg-zinc-950 text-zinc-100 antialiased">
+    <div class="ui-controls">
+        <button type="button" id="lang-toggle" class="lang-toggle" aria-pressed="false" data-i18n-aria="lang.aria">
+            <span class="lang-label-be" data-i18n="lang.be">BE</span>
+            <span class="lang-label-en" data-i18n="lang.en">EN</span>
+        </button>
+        <button type="button" id="theme-toggle" class="theme-toggle" aria-pressed="false" data-i18n-aria="theme.aria">
+            <svg class="theme-toggle-icon icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+            </svg>
+            <svg class="theme-toggle-icon icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <circle cx="12" cy="12" r="4" />
+                <path stroke-linecap="round" d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+            </svg>
+            <span class="theme-toggle-label-dark" data-i18n="theme.dark">Dark</span>
+            <span class="theme-toggle-label-light" data-i18n="theme.light">Light</span>
+        </button>
+    </div>
     <%
         const levelStyles = {
             success: 'border-emerald-400/40 bg-emerald-400/10 text-emerald-100',
@@ -35,7 +71,10 @@
             'Indexing': '📊',
             'Social': '📱',
             'Content': '📝',
-            'Media': '🖼️'
+            'Media': '🖼️',
+            'Links': '🔗',
+            'Branding': '🏷️',
+            'Mobile': '📲'
         };
         const titleLength = raw.title ? raw.title.length : 0;
         const descriptionLength = raw.description ? raw.description.length : 0;
@@ -54,25 +93,35 @@
         <!-- Header Section -->
         <header class="mb-6 flex flex-col gap-4 border-b border-zinc-800 pb-6 lg:flex-row lg:items-end lg:justify-between">
             <div>
-                <a href="/" class="text-sm font-medium text-cyan-300 transition hover:text-cyan-200">← New Audit</a>
-                <h1 class="mt-3 text-3xl font-semibold text-white sm:text-4xl">Audit Results</h1>
+                <a href="/" class="text-sm font-medium text-cyan-300 transition hover:text-cyan-200" data-i18n="report.newAudit">← New Audit</a>
+                <h1 class="mt-3 text-3xl font-semibold text-white sm:text-4xl" data-i18n="report.title">Audit Results</h1>
                 <p class="mt-3 max-w-4xl break-all text-sm text-zinc-300">
-                    <span class="text-zinc-500">Checked URL:</span>
+                    <span class="text-zinc-500" data-i18n="report.checkedUrl">Checked URL:</span>
                     <a href="<%= finalUrl %>" target="_blank" class="text-cyan-300 hover:text-cyan-200"><%= finalUrl %></a>
                 </p>
             </div>
             <div class="flex gap-3">
-                <div class="rounded-lg border border-zinc-800 bg-zinc-900 px-5 py-4">
-                    <p class="text-sm text-zinc-400">Overall Score</p>
+                <div class="rounded-lg border border-zinc-800 bg-zinc-900 px-5 py-4" <% if (typeof performance !== 'undefined' && performance) { %>data-perf-score="<%= performance.score %>" data-perf-grade="<%= performance.grade %>"<% } %>>
+                    <p class="text-sm text-zinc-400" data-i18n="report.overallScore">Overall Score</p>
                     <p class="mt-1 text-4xl font-semibold text-white"><%= summary.score %><span class="text-base text-zinc-500">/100</span></p>
                 </div>
-                <div class="flex gap-2">
+                <div class="flex flex-col gap-2 sm:flex-row">
+                    <button
+                        type="button"
+                        id="owner-explain-btn"
+                        class="owner-explain-btn inline-flex items-center justify-center gap-2 rounded-lg border border-transparent bg-zinc-100 px-5 py-4 text-sm font-semibold text-zinc-950 shadow-sm transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950"
+                    >
+                        <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-4 4v-4z" />
+                        </svg>
+                        <span id="owner-explain-btn-label">Explanation for site owner</span>
+                    </button>
                     <select id="exportFormat" class="rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-4 text-sm font-medium text-zinc-200">
                         <option value="json">JSON</option>
-                        <option value="html">HTML (Email)</option>
+                        <option value="html" data-i18n="report.exportHtml">HTML (Email)</option>
                     </select>
                     <button onclick="exportReport()" class="rounded-lg border border-zinc-800 bg-zinc-900 px-5 py-4 text-sm font-medium text-cyan-300 transition hover:bg-zinc-800">
-                        📥 Export
+                        <span data-i18n="report.export">Export</span>
                     </button>
                 </div>
             </div>
@@ -81,34 +130,168 @@
         <!-- Quick Stats -->
         <section class="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
             <div class="rounded-lg border border-zinc-800 bg-zinc-900 p-4">
-                <p class="text-sm text-zinc-400">Critical</p>
+                <p class="text-sm text-zinc-400" data-i18n="report.critical">Critical</p>
                 <p class="mt-1 text-2xl font-semibold text-red-200"><%= summary.danger %></p>
             </div>
             <div class="rounded-lg border border-zinc-800 bg-zinc-900 p-4">
-                <p class="text-sm text-zinc-400">Warning</p>
+                <p class="text-sm text-zinc-400" data-i18n="report.warning">Warning</p>
                 <p class="mt-1 text-2xl font-semibold text-amber-200"><%= summary.warning %></p>
             </div>
             <div class="rounded-lg border border-zinc-800 bg-zinc-900 p-4">
-                <p class="text-sm text-zinc-400">OK</p>
+                <p class="text-sm text-zinc-400" data-i18n="report.ok">OK</p>
                 <p class="mt-1 text-2xl font-semibold text-emerald-200"><%= summary.success %></p>
             </div>
             <div class="rounded-lg border border-zinc-800 bg-zinc-900 p-4">
-                <p class="text-sm text-zinc-400">Response Time</p>
+                <p class="text-sm text-zinc-400" data-i18n="report.responseTime">Response Time</p>
                 <p class="mt-1 text-2xl font-semibold text-white"><%= loadTime %> ms</p>
             </div>
             <div class="rounded-lg border border-zinc-800 bg-zinc-900 p-4">
-                <p class="text-sm text-zinc-400">Checked</p>
+                <p class="text-sm text-zinc-400" data-i18n="report.checked">Checked</p>
                 <p class="mt-1 text-sm font-medium text-zinc-200"><%= checkedAt %></p>
             </div>
         </section>
 
+        <% if (typeof performance !== 'undefined' && performance) { %>
+        <%
+            const perfGradeColors = {
+                A: 'text-emerald-300 border-emerald-400/40 bg-emerald-400/10',
+                B: 'text-lime-300 border-lime-400/40 bg-lime-400/10',
+                C: 'text-amber-300 border-amber-400/40 bg-amber-400/10',
+                D: 'text-orange-300 border-orange-400/40 bg-orange-400/10',
+                F: 'text-red-300 border-red-400/40 bg-red-400/10'
+            };
+            const vitalColors = {
+                good: 'border-emerald-400/40 bg-emerald-400/10 text-emerald-100',
+                'needs-improvement': 'border-amber-400/40 bg-amber-400/10 text-amber-100',
+                poor: 'border-red-400/40 bg-red-400/10 text-red-100'
+            };
+            const vitalLabels = {
+                good: 'Good',
+                'needs-improvement': 'Needs work',
+                poor: 'Poor'
+            };
+            const barColor =
+                performance.score >= 80 ? 'bg-emerald-400' :
+                performance.score >= 60 ? 'bg-amber-400' : 'bg-red-400';
+        %>
+        <!-- Estimated Performance -->
+        <section class="mb-8 rounded-lg border border-zinc-800 bg-zinc-900 p-5">
+            <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div>
+                    <p class="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300" data-i18n="report.performance">Performance</p>
+                    <h2 class="mt-2 text-xl font-semibold text-white" data-i18n="report.speedScore">Estimated speed score</h2>
+                    <p class="mt-2 max-w-2xl text-sm leading-6 text-zinc-400" data-i18n="report.speedLead">
+                        Heuristic score from response time, HTML weight, JS/CSS, compression and assets — not a PageSpeed Insights lab run. Click any metric card for a full guide.
+                    </p>
+                </div>
+                <div class="flex items-center gap-4">
+                    <div class="text-right">
+                        <p class="text-4xl font-semibold text-white"><%= performance.score %><span class="text-base text-zinc-500">/100</span></p>
+                        <div class="mt-2 h-2 w-40 overflow-hidden rounded-full bg-zinc-800">
+                            <div class="h-full <%= barColor %>" style="width: <%= performance.score %>%"></div>
+                        </div>
+                    </div>
+                    <div class="rounded-lg border px-4 py-3 text-center <%= perfGradeColors[performance.grade] || perfGradeColors.C %>">
+                        <p class="text-xs uppercase tracking-wide opacity-80" data-i18n="report.grade">Grade</p>
+                        <p class="text-3xl font-semibold"><%= performance.grade %></p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                <% Object.keys(performance.coreWebVitals).forEach(function(key) {
+                    const vital = performance.coreWebVitals[key];
+                    const display = vital.unit === 'ms' ? vital.value + ' ms' : String(vital.value);
+                %>
+                    <button
+                        type="button"
+                        class="vital-card rounded-lg border p-4 text-left transition hover:brightness-110 focus:outline-none focus:ring-2 focus:ring-cyan-400/50 <%= vitalColors[vital.status] || vitalColors['needs-improvement'] %>"
+                        data-vital="<%= key %>"
+                        aria-haspopup="dialog"
+                        aria-controls="vital-modal"
+                    >
+                        <div class="flex items-start justify-between gap-2">
+                            <p class="text-xs font-medium uppercase tracking-wide opacity-80"><%= key.toUpperCase() %></p>
+                            <span class="text-[10px] font-medium uppercase tracking-wide text-cyan-300/90" data-i18n="report.guide">Guide →</span>
+                        </div>
+                        <p class="mt-2 text-2xl font-semibold text-white"><%= display %></p>
+                        <p class="mt-1 text-xs font-medium opacity-90" data-vital-label="<%= key %>"><%= vital.label %></p>
+                        <p class="mt-2 text-xs leading-5 opacity-80" data-vital-short="<%= key %>"></p>
+                        <p class="mt-3 text-xs font-medium" data-vital-status="<%= vital.status %>"><%= vitalLabels[vital.status] || vital.status %></p>
+                    </button>
+                <% }) %>
+            </div>
+
+            <% if (performance.deductions && performance.deductions.length) { %>
+                <div class="mt-5 border-t border-zinc-800 pt-4">
+                    <p class="text-sm font-medium text-zinc-300" data-i18n="report.deductions">Score deductions</p>
+                    <ul class="mt-3 grid gap-2 sm:grid-cols-2">
+                        <% performance.deductions.forEach(function(item) { %>
+                            <li class="flex items-center justify-between gap-3 rounded-md border border-zinc-800 bg-zinc-950/60 px-3 py-2 text-sm">
+                                <span class="text-zinc-300" data-i18n-metric="<%= item.metric %>" data-i18n-value="<%= item.value %>"><%= item.metric %>: <span class="text-zinc-400"><%= item.value %></span></span>
+                                <span class="shrink-0 font-medium text-amber-200">-<%= item.penalty %></span>
+                            </li>
+                        <% }) %>
+                    </ul>
+                </div>
+            <% } %>
+        </section>
+
+        <div
+            id="vital-modal"
+            class="fixed inset-0 z-50 hidden items-end justify-center bg-zinc-950/80 p-4 backdrop-blur-sm sm:items-center"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="vital-modal-title"
+            hidden
+        >
+            <div class="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-lg border border-zinc-700 bg-zinc-900 shadow-2xl shadow-cyan-950/40">
+                <div class="flex items-start justify-between gap-4 border-b border-zinc-800 px-5 py-4">
+                    <div>
+                        <p id="vital-modal-key" class="text-xs font-semibold uppercase tracking-[0.16em] text-cyan-300"></p>
+                        <h2 id="vital-modal-title" class="mt-1 text-xl font-semibold text-white"></h2>
+                        <p id="vital-modal-targets" class="mt-2 text-xs text-zinc-400"></p>
+                    </div>
+                    <button
+                        type="button"
+                        id="vital-modal-close"
+                        class="rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 transition hover:bg-zinc-800 hover:text-white"
+                        data-i18n="report.close"
+                        data-i18n-aria="report.close"
+                    >
+                        Close
+                    </button>
+                </div>
+                <div class="overflow-y-auto px-5 py-5 text-sm leading-6 text-zinc-300">
+                    <p id="vital-modal-short" class="text-base text-zinc-100"></p>
+                    <section class="mt-5">
+                        <h3 class="text-sm font-semibold uppercase tracking-wide text-white" data-i18n="report.affects">What it affects</h3>
+                        <p id="vital-modal-affects" class="mt-2"></p>
+                    </section>
+                    <section class="mt-5">
+                        <h3 class="text-sm font-semibold uppercase tracking-wide text-white" data-i18n="report.depends">What it depends on</h3>
+                        <ul id="vital-modal-depends" class="mt-2 list-disc space-y-1.5 pl-5"></ul>
+                    </section>
+                    <section class="mt-5">
+                        <h3 class="text-sm font-semibold uppercase tracking-wide text-cyan-300" data-i18n="report.todo">What to do</h3>
+                        <ul id="vital-modal-do" class="mt-2 list-disc space-y-1.5 pl-5"></ul>
+                    </section>
+                    <p id="vital-modal-note" class="mt-5 hidden rounded-md border border-zinc-800 bg-zinc-950/70 px-3 py-2 text-xs text-zinc-400"></p>
+                </div>
+            </div>
+        </div>
+        <script>
+            window.__vitalMeta = <%- JSON.stringify(performance.coreWebVitals) %>;
+        </script>
+        <% } %>
+
         <!-- Category Filter Tabs -->
         <section class="mb-6 flex flex-wrap gap-2 border-b border-zinc-800 pb-4">
-            <button onclick="filterCategory('all')" class="category-tab active rounded-full border border-zinc-700 bg-zinc-900 px-4 py-2 text-sm font-medium text-zinc-200 transition hover:bg-zinc-800" data-category="all">
+            <button onclick="filterCategory('all')" class="category-tab active rounded-full border border-zinc-700 bg-zinc-900 px-4 py-2 text-sm font-medium text-zinc-200 transition hover:bg-zinc-800" data-category="all" data-i18n="report.allChecks">
                 All Checks
             </button>
             <% Object.keys(insightsByCategory).forEach(category => { %>
-                <button onclick="filterCategory('<%= category %>')" class="category-tab rounded-full border border-zinc-700 bg-zinc-900 px-4 py-2 text-sm font-medium text-zinc-200 transition hover:bg-zinc-800" data-category="<%= category %>">
+                <button onclick="filterCategory('<%= category %>')" class="category-tab rounded-full border border-zinc-700 bg-zinc-900 px-4 py-2 text-sm font-medium text-zinc-200 transition hover:bg-zinc-800" data-category="<%= category %>" data-i18n-category="<%= category %>" data-i18n-count="<%= insightsByCategory[category].length %>" data-i18n-icon="<%= categoryIcons[category] || '📋' %>">
                     <%= categoryIcons[category] || '📋' %> <%= category %> (<%= insightsByCategory[category].length %>)
                 </button>
             <% }) %>
@@ -118,42 +301,42 @@
         <section class="mb-8 grid gap-4 lg:grid-cols-2">
             <article class="rounded-lg border border-zinc-800 bg-zinc-900 p-5">
                 <div class="flex items-center justify-between gap-3">
-                    <h2 class="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Title</h2>
-                    <span class="rounded-full border border-zinc-700 px-2.5 py-1 text-xs text-zinc-300"><%= titleLength %> chars</span>
+                    <h2 class="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300" data-i18n="report.pageTitle">Title</h2>
+                    <span class="rounded-full border border-zinc-700 px-2.5 py-1 text-xs text-zinc-300"><%= titleLength %> <span data-i18n="report.chars">chars</span></span>
                 </div>
-                <p class="mt-3 break-words text-base leading-7 text-white"><%= raw.title || 'Title missing' %></p>
+                <p class="mt-3 break-words text-base leading-7 text-white"><%= raw.title || '' %><% if (!raw.title) { %><span data-i18n="report.titleMissing">Title missing</span><% } %></p>
             </article>
 
             <article class="rounded-lg border border-zinc-800 bg-zinc-900 p-5">
                 <div class="flex items-center justify-between gap-3">
-                    <h2 class="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Meta description</h2>
-                    <span class="rounded-full border border-zinc-700 px-2.5 py-1 text-xs text-zinc-300"><%= descriptionLength %> chars</span>
+                    <h2 class="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300" data-i18n="report.metaDescription">Meta description</h2>
+                    <span class="rounded-full border border-zinc-700 px-2.5 py-1 text-xs text-zinc-300"><%= descriptionLength %> <span data-i18n="report.chars">chars</span></span>
                 </div>
-                <p class="mt-3 break-words text-base leading-7 text-white"><%= raw.description || 'Meta description missing' %></p>
+                <p class="mt-3 break-words text-base leading-7 text-white"><%= raw.description || '' %><% if (!raw.description) { %><span data-i18n="report.descMissing">Meta description missing</span><% } %></p>
             </article>
         </section>
 
         <!-- Technical Metrics -->
         <section class="mb-8 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             <div class="rounded-lg border border-zinc-800 bg-zinc-900 p-4">
-                <p class="text-sm text-zinc-400">Links</p>
+                <p class="text-sm text-zinc-400" data-i18n="report.links">Links</p>
                 <p class="mt-1 text-xl font-semibold text-white"><%= raw.internalLinks %> / <%= raw.externalLinks %></p>
-                <p class="mt-1 text-xs text-zinc-500">internal / external</p>
+                <p class="mt-1 text-xs text-zinc-500" data-i18n="report.linksHint">internal / external</p>
             </div>
             <div class="rounded-lg border border-zinc-800 bg-zinc-900 p-4">
-                <p class="text-sm text-zinc-400">Images without alt</p>
+                <p class="text-sm text-zinc-400" data-i18n="report.imagesAlt">Images without alt</p>
                 <p class="mt-1 text-xl font-semibold text-white"><%= raw.imagesWithoutAlt %> + <%= raw.imagesWithEmptyAlt %></p>
-                <p class="mt-1 text-xs text-zinc-500">missing + empty</p>
+                <p class="mt-1 text-xs text-zinc-500" data-i18n="report.imagesAltHint">missing + empty</p>
             </div>
             <div class="rounded-lg border border-zinc-800 bg-zinc-900 p-4">
-                <p class="text-sm text-zinc-400">JS / CSS</p>
+                <p class="text-sm text-zinc-400" data-i18n="report.jsCss">JS / CSS</p>
                 <p class="mt-1 text-xl font-semibold text-white"><%= raw.scripts %> / <%= raw.stylesheets %></p>
-                <p class="mt-1 text-xs text-zinc-500">external files</p>
+                <p class="mt-1 text-xs text-zinc-500" data-i18n="report.jsCssHint">external files</p>
             </div>
             <div class="rounded-lg border border-zinc-800 bg-zinc-900 p-4">
-                <p class="text-sm text-zinc-400">HTML / text</p>
+                <p class="text-sm text-zinc-400" data-i18n="report.htmlText">HTML / text</p>
                 <p class="mt-1 text-xl font-semibold text-white"><%= raw.htmlSize %> / <%= raw.wordCount %></p>
-                <p class="mt-1 text-xs text-zinc-500">size / words</p>
+                <p class="mt-1 text-xs text-zinc-500" data-i18n="report.htmlTextHint">size / words</p>
             </div>
         </section>
 
@@ -166,8 +349,8 @@
                             <div class="flex items-center gap-3">
                                 <span class="text-2xl"><%= categoryIcons[category] || '📋' %></span>
                                 <div>
-                                    <h2 class="text-lg font-semibold text-white"><%= category %></h2>
-                                    <p class="text-sm text-zinc-400"><%= insightsByCategory[category].length %> checks performed</p>
+                                    <h2 class="text-lg font-semibold text-white" data-i18n-category="<%= category %>"><%= category %></h2>
+                                    <p class="text-sm text-zinc-400" data-i18n="report.checksPerformed" data-i18n-n="<%= insightsByCategory[category].length %>"><%= insightsByCategory[category].length %> checks performed</p>
                                 </div>
                             </div>
                             <svg class="h-5 w-5 transform transition-transform" id="icon-<%= category %>" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -182,15 +365,15 @@
                                             <div class="mb-2 flex flex-wrap items-center gap-2">
                                                 <span class="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-xs font-semibold">
                                                     <span class="h-2 w-2 rounded-full <%= levelDots[item.level] %>"></span>
-                                                    <%= levelLabels[item.level] %>
+                                                    <span data-i18n-level="<%= item.level %>"><%= levelLabels[item.level] %></span>
                                                 </span>
                                             </div>
-                                            <h2 class="text-base font-semibold text-white"><%= item.title %></h2>
-                                            <p class="mt-1 text-sm leading-6 text-zinc-200"><%= item.text %></p>
+                                            <h2 class="insight-title text-base font-semibold text-white" data-en="<%= item.title %>"><%= item.title %></h2>
+                                            <p class="insight-text mt-1 text-sm leading-6 text-zinc-200" data-en="<%= item.text %>"><%= item.text %></p>
                                         </div>
                                     </div>
                                     <% if (item.details && item.details.length) { %>
-                                        <button onclick="toggleDetails(this)" class="mt-2 text-xs text-cyan-300 hover:text-cyan-200">
+                                        <button onclick="toggleDetails(this)" class="mt-2 text-xs text-cyan-300 hover:text-cyan-200 details-toggle" data-i18n="report.showDetails">
                                             Show details ▼
                                         </button>
                                         <ul class="details-list hidden mt-3 space-y-1 border-t border-white/10 pt-3 text-xs leading-5 text-zinc-300">
@@ -209,59 +392,97 @@
             <!-- Sidebar -->
             <aside class="space-y-3">
                 <div class="rounded-lg border border-zinc-800 bg-zinc-900 p-4">
-                    <h2 class="text-sm font-semibold text-white">Raw Data</h2>
+                    <h2 class="text-sm font-semibold text-white" data-i18n="report.rawData">Raw Data</h2>
                     <dl class="mt-3 space-y-2 text-sm">
                         <div class="flex justify-between gap-3">
-                            <dt class="text-zinc-500">HTTP Status</dt>
+                            <dt class="text-zinc-500" data-i18n="raw.httpStatus">HTTP Status</dt>
                             <dd class="text-right text-zinc-200"><%= raw.status %></dd>
                         </div>
                         <div class="flex justify-between gap-3">
-                            <dt class="text-zinc-500">Content-Type</dt>
+                            <dt class="text-zinc-500" data-i18n="raw.contentType">Content-Type</dt>
                             <dd class="text-right text-zinc-200"><%= raw.contentType %></dd>
                         </div>
                         <div class="flex justify-between gap-3">
-                            <dt class="text-zinc-500">Redirects</dt>
+                            <dt class="text-zinc-500" data-i18n="raw.redirects">Redirects</dt>
                             <dd class="text-right text-zinc-200"><%= raw.redirects.length %></dd>
                         </div>
                         <div class="flex justify-between gap-3">
-                            <dt class="text-zinc-500">Canonical</dt>
-                            <dd class="max-w-48 break-all text-right text-zinc-200"><%= raw.canonical || 'None' %></dd>
+                            <dt class="text-zinc-500" data-i18n="raw.canonical">Canonical</dt>
+                            <dd class="max-w-48 break-all text-right text-zinc-200"><%= raw.canonical || '' %><% if (!raw.canonical) { %><span data-i18n="report.none">None</span><% } %></dd>
                         </div>
                         <div class="flex justify-between gap-3">
-                            <dt class="text-zinc-500">Robots meta</dt>
-                            <dd class="max-w-48 break-all text-right text-zinc-200"><%= raw.robots || 'None' %></dd>
+                            <dt class="text-zinc-500" data-i18n="raw.robotsMeta">Robots meta</dt>
+                            <dd class="max-w-48 break-all text-right text-zinc-200"><%= raw.robots || '' %><% if (!raw.robots) { %><span data-i18n="report.none">None</span><% } %></dd>
                         </div>
                         <div class="flex justify-between gap-3">
-                            <dt class="text-zinc-500">Sitemap</dt>
-                            <dd class="text-right text-zinc-200"><%= raw.sitemap.exists ? 'Found' : 'None' %></dd>
+                            <dt class="text-zinc-500" data-i18n="raw.sitemap">Sitemap</dt>
+                            <dd class="text-right text-zinc-200"><% if (raw.sitemap.exists) { %><span data-i18n="report.found">Found</span><% } else { %><span data-i18n="report.none">None</span><% } %></dd>
                         </div>
                         <div class="flex justify-between gap-3">
-                            <dt class="text-zinc-500">JSON-LD</dt>
+                            <dt class="text-zinc-500" data-i18n="raw.jsonLd">JSON-LD</dt>
                             <dd class="text-right text-zinc-200"><%= raw.jsonLd %></dd>
                         </div>
                         <div class="flex justify-between gap-3">
-                            <dt class="text-zinc-500">hreflang</dt>
+                            <dt class="text-zinc-500" data-i18n="raw.hreflang">hreflang</dt>
                             <dd class="text-right text-zinc-200"><%= raw.hreflang %></dd>
                         </div>
                         <div class="flex justify-between gap-3">
-                            <dt class="text-zinc-500">Compression</dt>
-                            <dd class="text-right text-zinc-200"><%= raw.compression || 'None' %></dd>
+                            <dt class="text-zinc-500" data-i18n="raw.compression">Compression</dt>
+                            <dd class="text-right text-zinc-200"><%= raw.compression || '' %><% if (!raw.compression) { %><span data-i18n="report.none">None</span><% } %></dd>
                         </div>
                     </dl>
                 </div>
 
                 <div class="rounded-lg border border-zinc-800 bg-zinc-900 p-4">
-                    <h2 class="text-sm font-semibold text-white">Title</h2>
-                    <p class="mt-2 break-words text-sm leading-6 text-zinc-300"><%= raw.title || 'None' %></p>
-                    <h2 class="mt-4 text-sm font-semibold text-white">Meta description</h2>
-                    <p class="mt-2 break-words text-sm leading-6 text-zinc-300"><%= raw.description || 'None' %></p>
-                    <h2 class="mt-4 text-sm font-semibold text-white">H1</h2>
-                    <p class="mt-2 break-words text-sm leading-6 text-zinc-300"><%= raw.h1.length ? raw.h1.join(' | ') : 'None' %></p>
+                    <h2 class="text-sm font-semibold text-white" data-i18n="report.pageTitle">Title</h2>
+                    <p class="mt-2 break-words text-sm leading-6 text-zinc-300"><%= raw.title || '' %><% if (!raw.title) { %><span data-i18n="report.none">None</span><% } %></p>
+                    <h2 class="mt-4 text-sm font-semibold text-white" data-i18n="report.metaDescription">Meta description</h2>
+                    <p class="mt-2 break-words text-sm leading-6 text-zinc-300"><%= raw.description || '' %><% if (!raw.description) { %><span data-i18n="report.none">None</span><% } %></p>
+                    <h2 class="mt-4 text-sm font-semibold text-white" data-i18n="report.h1">H1</h2>
+                    <p class="mt-2 break-words text-sm leading-6 text-zinc-300"><%= raw.h1.length ? raw.h1.join(' | ') : '' %><% if (!raw.h1.length) { %><span data-i18n="report.none">None</span><% } %></p>
                 </div>
             </aside>
         </section>
     </main>
 
+    <div
+        id="owner-explain-modal"
+        class="fixed inset-0 z-50 hidden items-end justify-center bg-zinc-950/80 p-4 backdrop-blur-sm sm:items-center"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="owner-explain-title"
+        hidden
+    >
+        <div class="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-lg border border-zinc-700 bg-zinc-900 shadow-2xl">
+            <div class="flex items-start justify-between gap-4 border-b border-zinc-800 px-5 py-4">
+                <h2 id="owner-explain-title" class="text-xl font-semibold text-white">Message for the site owner</h2>
+                <button
+                    type="button"
+                    id="owner-explain-close"
+                    class="rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 transition hover:bg-zinc-800 hover:text-white"
+                >
+                    Close
+                </button>
+            </div>
+            <div class="overflow-y-auto px-5 py-5">
+                <pre id="owner-explain-body" class="whitespace-pre-wrap font-sans text-sm leading-7 text-zinc-200"></pre>
+            </div>
+            <div class="border-t border-zinc-800 px-5 py-4">
+                <button
+                    type="button"
+                    id="owner-explain-copy"
+                    class="inline-flex h-10 items-center justify-center rounded-md bg-zinc-100 px-4 text-sm font-medium text-zinc-950 transition hover:bg-white"
+                >
+                    Copy message
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/i18n.js"></script>
+    <script src="/insights-i18n.js"></script>
+    <script src="/owner-explain.js"></script>
+    <script src="/theme.js"></script>
     <script>
         // Toggle category expansion
         function toggleCategory(category) {
@@ -304,10 +525,12 @@
             const detailsList = button.nextElementSibling;
             if (detailsList.classList.contains('hidden')) {
                 detailsList.classList.remove('hidden');
-                button.textContent = 'Hide details ▲';
+                button.setAttribute('data-i18n', 'report.hideDetails');
+                button.textContent = window.__i18n ? window.__i18n.t('report.hideDetails') : 'Hide details ▲';
             } else {
                 detailsList.classList.add('hidden');
-                button.textContent = 'Show details ▼';
+                button.setAttribute('data-i18n', 'report.showDetails');
+                button.textContent = window.__i18n ? window.__i18n.t('report.showDetails') : 'Show details ▼';
             }
         }
 
@@ -323,7 +546,8 @@
                     loadTime: <%= loadTime %>,
                     summary: <%- JSON.stringify(summary) %>,
                     insights: <%- JSON.stringify(insights) %>,
-                    raw: <%- JSON.stringify(raw) %>
+                    raw: <%- JSON.stringify(raw) %>,
+                    performance: <%- JSON.stringify(typeof performance !== 'undefined' ? performance : null) %>
                 };
 
                 const dataStr = JSON.stringify(reportData, null, 2);
@@ -355,7 +579,8 @@
                 loadTime: <%= loadTime %>,
                 summary: <%- JSON.stringify(summary) %>,
                 insights: <%- JSON.stringify(insights) %>,
-                raw: <%- JSON.stringify(raw) %>
+                raw: <%- JSON.stringify(raw) %>,
+                performance: <%- JSON.stringify(typeof performance !== 'undefined' ? performance : null) %>
             };
 
             const levelColors = {
@@ -490,7 +715,85 @@
                     icon.classList.add('rotate-180');
                 }
             });
+
+            initVitalGuides();
         });
+
+        function fillList(el, items) {
+            el.innerHTML = '';
+            (items || []).forEach((item) => {
+                const li = document.createElement('li');
+                li.textContent = item;
+                el.appendChild(li);
+            });
+        }
+
+        function openVitalGuide(key) {
+            const modal = document.getElementById('vital-modal');
+            const guides = window.__vitalGuides || {};
+            const meta = window.__vitalMeta || {};
+            const guide = guides[key];
+            const vital = meta[key];
+            if (!modal || !guide || !vital) return;
+
+            document.getElementById('vital-modal-key').textContent = key.toUpperCase();
+            document.getElementById('vital-modal-title').textContent = guide.label || vital.label;
+            document.getElementById('vital-modal-targets').textContent = guide.targets || '';
+            document.getElementById('vital-modal-short').textContent = guide.short || '';
+            document.getElementById('vital-modal-affects').textContent = guide.affects || '';
+            fillList(document.getElementById('vital-modal-depends'), guide.depends);
+            fillList(document.getElementById('vital-modal-do'), guide.do);
+
+            const noteEl = document.getElementById('vital-modal-note');
+            if (guide.note) {
+                noteEl.textContent = guide.note;
+                noteEl.classList.remove('hidden');
+            } else {
+                noteEl.textContent = '';
+                noteEl.classList.add('hidden');
+            }
+
+            openVitalKey = key;
+            modal.hidden = false;
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeVitalGuide() {
+            const modal = document.getElementById('vital-modal');
+            if (!modal) return;
+            openVitalKey = null;
+            modal.hidden = true;
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            document.body.style.overflow = '';
+        }
+
+        let openVitalKey = null;
+
+        function initVitalGuides() {
+            const modal = document.getElementById('vital-modal');
+            if (!modal) return;
+
+            document.querySelectorAll('.vital-card').forEach((card) => {
+                card.addEventListener('click', () => openVitalGuide(card.dataset.vital));
+            });
+
+            document.getElementById('vital-modal-close').addEventListener('click', closeVitalGuide);
+
+            modal.addEventListener('click', (event) => {
+                if (event.target === modal) closeVitalGuide();
+            });
+
+            document.addEventListener('keydown', (event) => {
+                if (event.key === 'Escape' && !modal.hidden) closeVitalGuide();
+            });
+
+            window.addEventListener('site-audit:lang', () => {
+                if (openVitalKey) openVitalGuide(openVitalKey);
+            });
+        }
     </script>
 </body>
 </html>

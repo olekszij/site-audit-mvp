@@ -33,6 +33,183 @@ function normalizeUrl(value) {
   return parsed.href;
 }
 
+function calculatePerformanceScore(context) {
+  const { loadTime, page, resourceAudit, compressionAudit } = context;
+  let score = 100;
+  const deductions = [];
+
+  const scriptCount = page.scripts.length;
+  const stylesheetCount = page.stylesheets.length;
+  const htmlSizeKb = page.htmlSizeBytes / 1024;
+  const imagesWithoutDimensions = page.images.filter(
+    (image) => !image.hasWidth || !image.hasHeight,
+  ).length;
+  const failedResources = resourceAudit?.unreachableAssets?.length || 0;
+  const heavyImages = resourceAudit?.heavyImages?.length || 0;
+  const cacheIssues = resourceAudit?.cacheIssues?.length || 0;
+
+  if (loadTime > 2000) {
+    const penalty = Math.min((loadTime - 2000) / 100, 20);
+    score -= penalty;
+    deductions.push({
+      metric: 'Response time',
+      value: loadTime + ' ms',
+      penalty: Number(penalty.toFixed(1)),
+    });
+  }
+
+  if (htmlSizeKb > 100) {
+    const penalty = Math.min((htmlSizeKb - 100) / 50, 10);
+    score -= penalty;
+    deductions.push({
+      metric: 'HTML size',
+      value: formatBytes(page.htmlSizeBytes),
+      penalty: Number(penalty.toFixed(1)),
+    });
+  }
+
+  if (scriptCount > 10) {
+    const penalty = Math.min((scriptCount - 10) * 1.5, 15);
+    score -= penalty;
+    deductions.push({
+      metric: 'Scripts',
+      value: String(scriptCount),
+      penalty: Number(penalty.toFixed(1)),
+    });
+  }
+
+  if (stylesheetCount > 5) {
+    const penalty = Math.min((stylesheetCount - 5) * 2, 10);
+    score -= penalty;
+    deductions.push({
+      metric: 'Stylesheets',
+      value: String(stylesheetCount),
+      penalty: Number(penalty.toFixed(1)),
+    });
+  }
+
+  if (imagesWithoutDimensions > 0) {
+    const penalty = Math.min(imagesWithoutDimensions * 1.5, 10);
+    score -= penalty;
+    deductions.push({
+      metric: 'Images without size',
+      value: String(imagesWithoutDimensions),
+      penalty: Number(penalty.toFixed(1)),
+    });
+  }
+
+  if (compressionAudit && !compressionAudit.encoding) {
+    score -= 8;
+    deductions.push({
+      metric: 'Compression',
+      value: 'None',
+      penalty: 8,
+    });
+  }
+
+  if (failedResources > 0) {
+    const penalty = Math.min(failedResources * 3, 15);
+    score -= penalty;
+    deductions.push({
+      metric: 'Failed resources',
+      value: String(failedResources),
+      penalty: Number(penalty.toFixed(1)),
+    });
+  }
+
+  if (heavyImages > 0) {
+    const penalty = Math.min(heavyImages * 2, 10);
+    score -= penalty;
+    deductions.push({
+      metric: 'Heavy images',
+      value: String(heavyImages),
+      penalty: Number(penalty.toFixed(1)),
+    });
+  }
+
+  if (cacheIssues > 0) {
+    const penalty = Math.min(cacheIssues * 1.5, 8);
+    score -= penalty;
+    deductions.push({
+      metric: 'Weak caching',
+      value: String(cacheIssues),
+      penalty: Number(penalty.toFixed(1)),
+    });
+  }
+
+  const finalScore = Math.max(0, Math.round(score));
+  return {
+    score: finalScore,
+    deductions,
+    grade: getPerformanceGrade(finalScore),
+  };
+}
+
+function getPerformanceGrade(score) {
+  if (score >= 90) return 'A';
+  if (score >= 80) return 'B';
+  if (score >= 70) return 'C';
+  if (score >= 60) return 'D';
+  return 'F';
+}
+
+function getVitalStatus(value, good, needsImprovement) {
+  if (value <= good) return 'good';
+  if (value <= needsImprovement) return 'needs-improvement';
+  return 'poor';
+}
+
+function simulateCoreWebVitals(context) {
+  const { loadTime, page } = context;
+  const scriptCount = page.scripts.length;
+  const stylesheetCount = page.stylesheets.length;
+  const imagesWithoutDimensions = page.images.filter(
+    (image) => !image.hasWidth || !image.hasHeight,
+  ).length;
+
+  // Estimated from response time + asset signals (not lab PSI / CrUX).
+  const ttfb = loadTime;
+  const fcp = Math.round(Math.max(loadTime * 0.55, Math.min(loadTime + 200, 2500)));
+  const lcp = Math.round(
+    Math.max(fcp + 300, loadTime * 1.15 + scriptCount * 60 + stylesheetCount * 40),
+  );
+  const cls = Math.min(imagesWithoutDimensions * 0.04, 0.5);
+  const fid = Math.min(scriptCount * 12, 300);
+
+  return {
+    ttfb: {
+      value: ttfb,
+      unit: 'ms',
+      status: getVitalStatus(ttfb, 800, 1800),
+      label: 'Time to First Byte',
+    },
+    fcp: {
+      value: fcp,
+      unit: 'ms',
+      status: getVitalStatus(fcp, 1800, 3000),
+      label: 'First Contentful Paint',
+    },
+    lcp: {
+      value: lcp,
+      unit: 'ms',
+      status: getVitalStatus(lcp, 2500, 4000),
+      label: 'Largest Contentful Paint',
+    },
+    cls: {
+      value: Number(cls.toFixed(3)),
+      unit: '',
+      status: getVitalStatus(cls, 0.1, 0.25),
+      label: 'Cumulative Layout Shift',
+    },
+    fid: {
+      value: Math.round(fid),
+      unit: 'ms',
+      status: getVitalStatus(fid, 100, 300),
+      label: 'First Input Delay',
+    },
+  };
+}
+
 async function runAudit(targetUrl) {
   const fetchResult = await fetchHtmlWithRedirects(targetUrl);
   const html =
@@ -77,7 +254,12 @@ async function runAudit(targetUrl) {
     compressionAudit,
     tlsAudit,
   };
-  const insights = buildInsights(context);
+  
+  // Calculate performance metrics
+  const performanceScore = calculatePerformanceScore(context);
+  const coreWebVitals = simulateCoreWebVitals(context);
+  
+  const insights = buildInsights(context, performanceScore, coreWebVitals);
 
   return {
     targetUrl,
@@ -87,6 +269,12 @@ async function runAudit(targetUrl) {
     insights,
     summary: buildSummary(insights),
     raw: buildRawData(context),
+    performance: {
+      score: performanceScore.score,
+      grade: performanceScore.grade,
+      deductions: performanceScore.deductions,
+      coreWebVitals
+    }
   };
 }
 
@@ -303,7 +491,7 @@ function buildInsights({
   resourceAudit,
   compressionAudit,
   tlsAudit,
-}) {
+}, performanceScore, coreWebVitals) {
   const insights = [];
   const finalUrlObject = new URL(finalUrl);
   const targetUrlObject = new URL(targetUrl);
@@ -422,6 +610,7 @@ function buildInsights({
     resourceAudit,
     compressionAudit,
   );
+  addEstimatedPerformanceInsights(insights, performanceScore, coreWebVitals);
   addSecurityInsights(insights, response.headers, finalUrlObject, page, tlsAudit);
   addAccessibilityInsights(insights, page);
   addLinkInsights(insights, linkAudit);
@@ -1079,6 +1268,49 @@ function addPerformanceInsights(
       'Resources checked: ' + resourceAudit.checkedResources + '.',
     );
   }
+}
+
+function addEstimatedPerformanceInsights(insights, performanceScore, coreWebVitals) {
+  const scoreLevel =
+    performanceScore.score >= 80
+      ? 'success'
+      : performanceScore.score >= 60
+        ? 'warning'
+        : 'danger';
+
+  addInsight(
+    insights,
+    scoreLevel,
+    'Performance',
+    'Estimated performance score: ' +
+      performanceScore.score +
+      '/100 (grade ' +
+      performanceScore.grade +
+      ')',
+    'Heuristic score from response time, HTML weight, JS/CSS count, compression, caching and broken assets. Not a PageSpeed Insights lab score.',
+    performanceScore.deductions.map(
+      (item) => item.metric + ': ' + item.value + ' (-' + item.penalty + ')',
+    ),
+  );
+
+  Object.values(coreWebVitals).forEach((vital) => {
+    const level =
+      vital.status === 'good'
+        ? 'success'
+        : vital.status === 'needs-improvement'
+          ? 'warning'
+          : 'danger';
+    const displayValue =
+      vital.unit === 'ms' ? vital.value + ' ms' : String(vital.value);
+
+    addInsight(
+      insights,
+      level,
+      'Performance',
+      'Estimated ' + vital.label + ': ' + displayValue,
+      'Approx. signal only — derived from server response and page assets, not browser timing APIs.',
+    );
+  });
 }
 
 function addSecurityInsights(insights, headers, finalUrlObject, page, tlsAudit) {

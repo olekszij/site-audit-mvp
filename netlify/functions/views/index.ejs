@@ -4,23 +4,78 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Site Audit MVP</title>
+    <script>
+        (function () {
+            try {
+                var savedTheme = localStorage.getItem('site-audit-theme');
+                var theme = savedTheme === 'light' || savedTheme === 'dark'
+                    ? savedTheme
+                    : (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+                document.documentElement.setAttribute('data-theme', theme);
+
+                var savedLang = localStorage.getItem('site-audit-lang');
+                var lang = savedLang === 'be' || savedLang === 'en' ? savedLang : 'en';
+                document.documentElement.setAttribute('data-lang', lang);
+                document.documentElement.setAttribute('lang', lang === 'be' ? 'be' : 'en');
+            } catch (e) {
+                document.documentElement.setAttribute('data-theme', 'dark');
+                document.documentElement.setAttribute('data-lang', 'en');
+            }
+        })();
+    </script>
     <link rel="stylesheet" href="/styles.css">
+    <style>
+        @keyframes audit-spin {
+            to { transform: rotate(360deg); }
+        }
+        .audit-spinner {
+            width: 2.5rem;
+            height: 2.5rem;
+            border-width: 3px;
+            border-style: solid;
+            border-radius: 50%;
+            animation: audit-spin 0.8s linear infinite;
+        }
+        .audit-spinner-sm {
+            width: 1rem;
+            height: 1rem;
+            border-width: 2px;
+        }
+    </style>
 </head>
 <body class="min-h-screen bg-zinc-950 text-zinc-100 antialiased">
+    <div class="ui-controls">
+        <button type="button" id="lang-toggle" class="lang-toggle" aria-pressed="false" data-i18n-aria="lang.aria">
+            <span class="lang-label-be" data-i18n="lang.be">BE</span>
+            <span class="lang-label-en" data-i18n="lang.en">EN</span>
+        </button>
+        <button type="button" id="theme-toggle" class="theme-toggle" aria-pressed="false" data-i18n-aria="theme.aria">
+            <svg class="theme-toggle-icon icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+            </svg>
+            <svg class="theme-toggle-icon icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <circle cx="12" cy="12" r="4" />
+                <path stroke-linecap="round" d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+            </svg>
+            <span class="theme-toggle-label-dark" data-i18n="theme.dark">Dark</span>
+            <span class="theme-toggle-label-light" data-i18n="theme.light">Light</span>
+        </button>
+    </div>
+
     <main class="mx-auto flex min-h-screen w-full max-w-5xl flex-col justify-center px-5 py-10 sm:px-8">
         <section class="grid gap-8 lg:grid-cols-[1fr_360px] lg:items-center">
             <div>
-                <p class="mb-3 text-sm font-medium uppercase tracking-[0.18em] text-cyan-300">SEO • Security • Performance</p>
-                <h1 class="max-w-3xl text-4xl font-semibold leading-tight text-white sm:text-5xl">
-Deep Express Site Audit
+                <p class="mb-3 text-sm font-medium uppercase tracking-[0.18em] text-cyan-300" data-i18n="home.eyebrow">SEO • Security • Performance</p>
+                <h1 class="max-w-3xl text-4xl font-semibold leading-tight text-white sm:text-5xl" data-i18n="home.title">
+                    Deep Express Site Audit
                 </h1>
-                <p class="mt-5 max-w-2xl text-base leading-7 text-zinc-300">
-Checks indexing, meta tags, links, media, security headers, speed, accessibility, and basic technical hygiene of the page.
+                <p class="mt-5 max-w-2xl text-base leading-7 text-zinc-300" data-i18n="home.lead">
+                    Checks indexing, meta tags, links, media, security headers, speed, accessibility, and basic technical hygiene of the page.
                 </p>
             </div>
 
-            <form action="/audit" method="POST" class="rounded-lg border border-zinc-800 bg-zinc-900/80 p-5 shadow-2xl shadow-cyan-950/20">
-                <label for="url" class="block text-sm font-medium text-zinc-200">Site URL</label>
+            <form id="audit-form" action="/audit" method="POST" class="rounded-lg border border-zinc-800 bg-zinc-900/80 p-5 shadow-2xl shadow-cyan-950/20">
+                <label for="url" class="block text-sm font-medium text-zinc-200" data-i18n="home.urlLabel">Site URL</label>
                 <input
                     id="url"
                     type="url"
@@ -31,17 +86,144 @@ Checks indexing, meta tags, links, media, security headers, speed, accessibility
                     class="mt-2 block w-full rounded-md border border-zinc-700 bg-zinc-950 px-4 py-3 text-base text-white outline-none transition focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/30"
                 >
 
-                <% if (error) { %>
-                    <div class="mt-4 rounded-md border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
-                        <%= error %>
-                    </div>
-                <% } %>
+                <div id="error-container" class="<%= error ? '' : 'hidden' %> mt-4 rounded-md border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+                    <div id="error-message"><%= error || '' %></div>
+                </div>
 
-                <button type="submit" class="mt-5 inline-flex w-full items-center justify-center rounded-md bg-cyan-400 px-4 py-3 text-sm font-semibold text-zinc-950 transition hover:bg-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300 focus:ring-offset-2 focus:ring-offset-zinc-950">
-                    Run Audit
+                <button
+                    id="submit-btn"
+                    type="submit"
+                    class="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-md bg-cyan-400 px-4 py-3 text-sm font-semibold text-zinc-950 transition hover:bg-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300 focus:ring-offset-2 focus:ring-offset-zinc-950 disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                    <span id="btn-spinner" class="audit-spinner audit-spinner-sm hidden" aria-hidden="true"></span>
+                    <span id="btn-label" data-i18n="home.run">Run Audit</span>
                 </button>
             </form>
         </section>
     </main>
+
+    <div
+        id="loading-overlay"
+        class="fixed inset-0 z-50 hidden items-center justify-center bg-zinc-950/80 backdrop-blur-sm"
+        role="status"
+        aria-live="polite"
+        aria-busy="true"
+    >
+        <div class="mx-5 w-full max-w-sm rounded-lg border border-zinc-800 bg-zinc-900 px-6 py-8 text-center shadow-2xl shadow-cyan-950/30">
+            <div class="mx-auto audit-spinner" aria-hidden="true"></div>
+            <p class="mt-5 text-lg font-semibold text-white" data-i18n="home.loadingTitle">Running audit…</p>
+            <p id="loading-hint" class="mt-2 text-sm leading-6 text-zinc-400" data-i18n="home.hint0">
+                Checking SEO, security, links and performance. This can take up to a minute.
+            </p>
+        </div>
+    </div>
+
+    <script src="/i18n.js"></script>
+    <script src="/theme.js"></script>
+    <script>
+        const form = document.getElementById('audit-form');
+        const submitBtn = document.getElementById('submit-btn');
+        const btnLabel = document.getElementById('btn-label');
+        const btnSpinner = document.getElementById('btn-spinner');
+        const urlInput = document.getElementById('url');
+        const errorContainer = document.getElementById('error-container');
+        const errorMessage = document.getElementById('error-message');
+        const loadingOverlay = document.getElementById('loading-overlay');
+        const loadingHint = document.getElementById('loading-hint');
+
+        let hintTimer = null;
+        let hintIndex = 0;
+        let isLoading = false;
+
+        function currentHints() {
+            return window.__i18n ? window.__i18n.hints() : [];
+        }
+
+        function setLoading(nextLoading) {
+            isLoading = nextLoading;
+            submitBtn.disabled = nextLoading;
+            urlInput.disabled = nextLoading;
+            btnSpinner.classList.toggle('hidden', !nextLoading);
+            btnLabel.setAttribute('data-i18n', nextLoading ? 'home.auditing' : 'home.run');
+            btnLabel.textContent = window.__i18n
+                ? window.__i18n.t(nextLoading ? 'home.auditing' : 'home.run')
+                : (nextLoading ? 'Auditing…' : 'Run Audit');
+            loadingOverlay.classList.toggle('hidden', !nextLoading);
+            loadingOverlay.classList.toggle('flex', nextLoading);
+            document.body.style.overflow = nextLoading ? 'hidden' : '';
+
+            if (nextLoading) {
+                hintIndex = 0;
+                const hints = currentHints();
+                loadingHint.textContent = hints[0] || '';
+                hintTimer = setInterval(() => {
+                    const list = currentHints();
+                    hintIndex = (hintIndex + 1) % list.length;
+                    loadingHint.textContent = list[hintIndex];
+                }, 3500);
+            } else if (hintTimer) {
+                clearInterval(hintTimer);
+                hintTimer = null;
+            }
+        }
+
+        window.addEventListener('site-audit:lang', () => {
+            if (!isLoading) return;
+            const hints = currentHints();
+            loadingHint.textContent = hints[hintIndex % hints.length] || '';
+            btnLabel.textContent = window.__i18n.t('home.auditing');
+        });
+
+        function showError(message) {
+            errorContainer.classList.remove('hidden');
+            errorMessage.textContent = message;
+        }
+
+        form.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            errorContainer.classList.add('hidden');
+            const body = new URLSearchParams(new FormData(form));
+            setLoading(true);
+
+            try {
+                const response = await fetch('/audit', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body,
+                });
+
+                const contentType = response.headers.get('content-type') || '';
+                const payload = await response.text();
+
+                if (!response.ok) {
+                    let message = window.__i18n
+                        ? window.__i18n.t('home.errorFallback')
+                        : 'Failed to perform site audit.';
+                    if (contentType.includes('application/json')) {
+                        try {
+                            const data = JSON.parse(payload);
+                            message = data.error || message;
+                        } catch (_) {}
+                    } else if (payload) {
+                        message = payload;
+                    }
+                    throw new Error(message);
+                }
+
+                document.open();
+                document.write(payload);
+                document.close();
+            } catch (error) {
+                console.error('Audit error:', error);
+                setLoading(false);
+                showError(
+                    error.message ||
+                        (window.__i18n ? window.__i18n.t('home.errorFallback') : 'Failed to perform site audit.'),
+                );
+            }
+        });
+    </script>
 </body>
 </html>
