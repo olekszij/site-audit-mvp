@@ -395,10 +395,13 @@ html[data-theme="light"] .bg-cyan-600 {
   box-shadow: 0 0 0 2px var(--background), 0 0 0 4px var(--ring);
 }
 
-.lang-toggle .lang-label-en { display: none; }
-.lang-toggle .lang-label-be { display: inline; }
+.lang-toggle .lang-label-en,
+.lang-toggle .lang-label-fr,
+.lang-toggle .lang-label-be { display: none; }
+/* Show next language in cycle: en → fr → be → en */
+html[data-lang="en"] .lang-toggle .lang-label-fr { display: inline; }
+html[data-lang="fr"] .lang-toggle .lang-label-be { display: inline; }
 html[data-lang="be"] .lang-toggle .lang-label-en { display: inline; }
-html[data-lang="be"] .lang-toggle .lang-label-be { display: none; }
 
 .theme-toggle-icon {
   width: 1rem;

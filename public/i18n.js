@@ -214,6 +214,114 @@
         note: 'FID у field-дадзеных замяняецца на INP, але рамонт той жа: вызваліце main thread.',
       },
     },
+    fr: {
+      ttfb: {
+        short:
+          'À quelle vitesse le serveur commence à envoyer le premier octet de la réponse.',
+        label: 'Temps jusqu’au premier octet',
+        affects:
+          'Tout ce qui suit — un TTFB lent retarde le FCP, le LCP et le moment où la page « semble prête ».',
+        depends: [
+          'Démarrages à froid CPU/serveur et distance de l’hébergement',
+          'Temps de résolution DNS et de poignée de main TLS',
+          'Travail backend : requêtes DB, SSR, redirections, middleware',
+          'CDN / cache edge vs origin à chaque requête',
+        ],
+        do: [
+          'Placez le site derrière un CDN et cachez HTML/API là où c’est sûr',
+          'Réduisez les chaînes de redirections (surtout HTTP→HTTPS→www)',
+          'Accélérez l’origin : hébergement plus rapide, index DB, moins de SSR',
+          'Activez keep-alive / HTTP/2 ou HTTP/3',
+          'Préchauffez les endpoints critiques ; évitez les cold starts serverless sur la landing',
+        ],
+        targets: 'Bon ≤ 800 ms · À améliorer ≤ 1800 ms · Faible > 1800 ms',
+      },
+      fcp: {
+        short:
+          'Quand le premier texte ou image apparaît — l’utilisateur voit enfin quelque chose.',
+        label: 'Premier rendu de contenu',
+        affects:
+          'Vitesse perçue. Un FCP lent donne un écran blanc et augmente le risque de rebond.',
+        depends: [
+          'TTFB (le serveur doit répondre d’abord)',
+          'CSS et polices bloquants dans <head>',
+          'HTML volumineux ou JS lourd qui retarde le premier rendu',
+          'Réseau client et CPU de l’appareil',
+        ],
+        do: [
+          'Inlinez le CSS critique ; différéz les feuilles non critiques',
+          'Preload de la police / image hero principale ; font-display: swap',
+          'Supprimez le CSS inutilisé ; évitez les gros frameworks CSS au premier écran',
+          'Différez le JS non essentiel ; gardez un <head> léger',
+          'Compressez le HTML (gzip/brotli) et réduisez le markup above-the-fold',
+        ],
+        targets: 'Bon ≤ 1,8 s · À améliorer ≤ 3,0 s · Faible > 3,0 s',
+      },
+      lcp: {
+        short:
+          'Quand le plus grand contenu visible (image hero, titre, poster vidéo) finit de s’afficher.',
+        label: 'Rendu du plus grand contenu',
+        affects:
+          'Core Web Vital « contenu utile ». Google l’utilise dans le ranking / page experience.',
+        depends: [
+          'Chaîne TTFB + FCP',
+          'Taille et format de l’élément LCP (souvent une image hero)',
+          'Si la ressource LCP est découvrable tôt (pas lazy / tardive)',
+          'CSS/JS qui retardent le rendu du bloc principal',
+        ],
+        do: [
+          'Identifiez l’élément LCP dans DevTools Performance / PSI',
+          'Optimisez cette image : formats modernes (AVIF/WebP), dimensions, compression',
+          'Preload de l’image LCP ; ne pas la lazy-loader',
+          'Servez les images via CDN ; définissez width/height',
+          'Évitez les heroes injectés tardivement par des frameworks JS lourds',
+        ],
+        targets: 'Bon ≤ 2,5 s · À améliorer ≤ 4,0 s · Faible > 4,0 s',
+      },
+      cls: {
+        short:
+          'À quel point la mise en page saute pendant le chargement — boutons/texte qui bougent sous le doigt.',
+        label: 'Décalage cumulatif de mise en page',
+        affects:
+          'Confiance et utilisabilité. Un CLS élevé provoque des mauvais clics et un sentiment de site « cassé ». Aussi un Core Web Vital.',
+        depends: [
+          'Images/pubs/embeds sans width & height réservés',
+          'Polices web qui reflowent le texte',
+          'Bannières dynamiques, barres cookies, UI tardive au-dessus du contenu',
+          'Animations via top/height au lieu de transform/opacity',
+        ],
+        do: [
+          'Définissez toujours width et height (ou aspect-ratio) sur images et vidéos',
+          'Réservez de l’espace pour pubs, embeds et barres sticky',
+          'Préférez font-display: optional/swap et des métriques de fallback proches',
+          'N’insérez pas de contenu au-dessus du contenu déjà affiché après chargement',
+          'Animez avec transform/opacity, pas des propriétés qui reflowent',
+        ],
+        targets: 'Bon ≤ 0,1 · À améliorer ≤ 0,25 · Faible > 0,25',
+      },
+      fid: {
+        short:
+          'Délai entre le premier tap/clic et le moment où le navigateur peut commencer à le traiter.',
+        label: 'Délai de première interaction',
+        affects:
+          'Interactivité. Un FID élevé : la page a l’air prête mais ignore les clics (main thread occupé).',
+        depends: [
+          'Volume de JS : parsing, compilation, exécution',
+          'Longues tâches sur le main thread pendant le chargement',
+          'Scripts tiers (analytics, chat, tags)',
+          'Hydration lourde dans les frameworks SPA',
+        ],
+        do: [
+          'Découpez et code-splittez le JS ; moins de code au premier chargement',
+          'Defer / async pour les tiers ; chargez le chat après interaction',
+          'Cassez les long tasks (>50 ms) ; utilisez requestIdleCallback si utile',
+          'Frameworks plus légers ou hydration progressive',
+          'Déplacez le travail lourd vers des Web Workers si possible',
+        ],
+        targets: 'Bon ≤ 100 ms · À améliorer ≤ 300 ms · Faible > 300 ms',
+        note: 'Le FID est remplacé par l’INP dans les données de terrain, mais la correction est la même : libérez le main thread.',
+      },
+    },
   };
 
   var dict = {
@@ -223,6 +331,7 @@
       'theme.aria': 'Switch theme',
       'lang.aria': 'Switch language',
       'lang.en': 'EN',
+      'lang.fr': 'FR',
       'lang.be': 'BE',
       'home.eyebrow': 'SEO • Security • Performance',
       'home.title': 'Deep Express Site Audit',
@@ -328,6 +437,7 @@
       'theme.aria': 'Пераключыць тэму',
       'lang.aria': 'Пераключыць мову',
       'lang.en': 'EN',
+      'lang.fr': 'FR',
       'lang.be': 'BE',
       'home.eyebrow': 'SEO • Бяспека • Хуткасць',
       'home.title': 'Глыбокі Express-аўдыт сайта',
@@ -427,12 +537,120 @@
       'metric.Heavy images': 'Цяжкія выявы',
       'metric.Weak caching': 'Слабы кэш',
     },
+    fr: {
+      'theme.dark': 'Sombre',
+      'theme.light': 'Clair',
+      'theme.aria': 'Changer de thème',
+      'lang.aria': 'Changer de langue',
+      'lang.en': 'EN',
+      'lang.fr': 'FR',
+      'lang.be': 'BE',
+      'home.eyebrow': 'SEO • Sécurité • Performance',
+      'home.title': 'Audit Express approfondi de site',
+      'home.lead':
+        'Vérifie l’indexation, les meta tags, les liens, les médias, les en-têtes de sécurité, la vitesse, l’accessibilité et l’hygiène technique de base de la page.',
+      'home.urlLabel': 'URL du site',
+      'home.run': 'Lancer l’audit',
+      'home.auditing': 'Audit…',
+      'home.loadingTitle': 'Audit en cours…',
+      'home.errorFallback': 'Échec de l’audit du site.',
+      'home.hint0':
+        'Vérification SEO, sécurité, liens et performance. Cela peut prendre jusqu’à une minute.',
+      'home.hint1': 'Récupération du HTML et suivi des redirections…',
+      'home.hint2': 'Analyse des meta tags, titres et données structurées…',
+      'home.hint3': 'Vérification des liens, images et ressources statiques…',
+      'home.hint4': 'Contrôle des en-têtes de sécurité et du TLS…',
+      'report.newAudit': '← Nouvel audit',
+      'report.title': 'Résultats de l’audit',
+      'report.checkedUrl': 'URL vérifiée :',
+      'report.overallScore': 'Score global',
+      'report.scoreHint': '100 − 12×critique − 5×avertissement − 1×info',
+      'report.speedLeadShort': 'Estimation heuristique de vitesse — pas un lab PageSpeed.',
+      'report.words': 'mots',
+      'report.export': 'Exporter',
+      'report.exportHtml': 'HTML (Email)',
+      'report.critical': 'Critique',
+      'report.warning': 'Avertissement',
+      'report.ok': 'OK',
+      'report.info': 'Info',
+      'report.clearFilter': 'Tout afficher',
+      'report.filteredChecks': '%s problèmes',
+      'report.responseTime': 'Temps de réponse',
+      'report.checked': 'Vérifié',
+      'report.performance': 'Performance',
+      'report.speedScore': 'Score de vitesse estimé',
+      'report.speedLead':
+        'Score heuristique basé sur le temps de réponse, le poids HTML, JS/CSS, la compression et les assets — pas un run lab PageSpeed Insights. Cliquez une carte métrique pour le guide complet.',
+      'report.grade': 'Note',
+      'report.guide': 'Guide →',
+      'report.deductions': 'Pénalités de score',
+      'report.close': 'Fermer',
+      'report.affects': 'Ce que cela affecte',
+      'report.depends': 'De quoi cela dépend',
+      'report.todo': 'Que faire',
+      'report.allChecks': 'Toutes les vérifications',
+      'report.chars': 'car.',
+      'report.titleMissing': 'Title manquant',
+      'report.descMissing': 'Meta description manquante',
+      'report.metaDescription': 'Meta description',
+      'report.links': 'Liens',
+      'report.linksHint': 'internes / externes',
+      'report.imagesAlt': 'Images sans alt',
+      'report.imagesAltHint': 'manquants + vides',
+      'report.jsCss': 'JS / CSS',
+      'report.jsCssHint': 'fichiers externes',
+      'report.htmlText': 'HTML / texte',
+      'report.htmlTextHint': 'taille / mots',
+      'report.checksPerformed': '{n} vérifications effectuées',
+      'report.showDetails': 'Afficher les détails ▼',
+      'report.hideDetails': 'Masquer les détails ▲',
+      'report.rawData': 'Données brutes',
+      'report.none': 'Aucun',
+      'report.found': 'Trouvé',
+      'vital.good': 'Bon',
+      'vital.needs-improvement': 'À améliorer',
+      'vital.poor': 'Faible',
+      'cat.SEO': 'SEO',
+      'cat.Performance': 'Performance',
+      'cat.Security': 'Sécurité',
+      'cat.Accessibility': 'Accessibilité',
+      'cat.Technical': 'Technique',
+      'cat.Indexing': 'Indexation',
+      'cat.Social': 'Social',
+      'cat.Content': 'Contenu',
+      'cat.Media': 'Médias',
+      'cat.Links': 'Liens',
+      'cat.Branding': 'Marque',
+      'cat.Mobile': 'Mobile',
+      'report.pageTitle': 'Title',
+      'report.h1': 'H1',
+      'raw.httpStatus': 'Statut HTTP',
+      'raw.contentType': 'Content-Type',
+      'raw.redirects': 'Redirections',
+      'raw.canonical': 'Canonical',
+      'raw.robotsMeta': 'Meta robots',
+      'raw.sitemap': 'Sitemap',
+      'raw.jsonLd': 'JSON-LD',
+      'raw.hreflang': 'hreflang',
+      'raw.compression': 'Compression',
+      'metric.Response time': 'Temps de réponse',
+      'metric.HTML size': 'Taille HTML',
+      'metric.Scripts': 'Scripts',
+      'metric.Stylesheets': 'Feuilles de style',
+      'metric.Images without size': 'Images sans dimensions',
+      'metric.Compression': 'Compression',
+      'metric.Failed resources': 'Ressources en échec',
+      'metric.Heavy images': 'Images lourdes',
+      'metric.Weak caching': 'Cache faible',
+    },
   };
+
+  var LANGS = ['en', 'fr', 'be'];
 
   function getPreferredLang() {
     try {
       var saved = localStorage.getItem(STORAGE_KEY);
-      if (saved === 'en' || saved === 'be') return saved;
+      if (LANGS.indexOf(saved) !== -1) return saved;
     } catch (_) {}
     return 'en';
   }
@@ -445,7 +663,7 @@
 
   function applyI18n(lang) {
     lang = lang || getPreferredLang();
-    document.documentElement.setAttribute('lang', lang === 'be' ? 'be' : 'en');
+    document.documentElement.setAttribute('lang', lang);
     document.documentElement.setAttribute('data-lang', lang);
     try {
       localStorage.setItem(STORAGE_KEY, lang);
@@ -531,7 +749,7 @@
 
     var langToggle = document.getElementById('lang-toggle');
     if (langToggle) {
-      langToggle.setAttribute('aria-pressed', lang === 'be' ? 'true' : 'false');
+      langToggle.setAttribute('aria-pressed', lang === 'en' ? 'false' : 'true');
       langToggle.setAttribute('aria-label', t('lang.aria', lang));
     }
 
@@ -551,7 +769,8 @@
 
   function toggleLang() {
     var current = getPreferredLang();
-    applyI18n(current === 'be' ? 'en' : 'be');
+    var idx = LANGS.indexOf(current);
+    applyI18n(LANGS[(idx + 1) % LANGS.length]);
   }
 
   window.__i18n = {
@@ -559,6 +778,7 @@
     apply: applyI18n,
     toggle: toggleLang,
     getLang: getPreferredLang,
+    langs: LANGS,
     vitalGuides: vitalGuides,
     hints: function (lang) {
       lang = lang || getPreferredLang();

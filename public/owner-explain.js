@@ -30,6 +30,20 @@
       title: 'Паведамленне для ўладальніка сайта',
       close: 'Закрыць',
     },
+    fr: {
+      introBad:
+        'Bonjour ! Nous avons vérifié votre site et trouvé quelques problèmes sérieux à corriger en priorité. En termes simples :',
+      introOk:
+        'Bonjour ! Nous avons vérifié votre site. Il n’y a pas de problèmes critiques pour le moment — bravo. Surveillez quand même les avertissements quand vous le pouvez.',
+      outro:
+        'Si vous voulez, envoyez cette liste à votre développeur ou au support d’hébergement et demandez-leur de corriger ces points.',
+      copy: 'Copier le message',
+      copied: 'Copié',
+      empty: 'Aucun problème critique à expliquer.',
+      button: 'Explication pour le propriétaire',
+      title: 'Message pour le propriétaire du site',
+      close: 'Fermer',
+    },
   };
 
   var exact = {
@@ -213,6 +227,96 @@
       'robots.txt not found':
         'Няма файла robots.txt. Абход усё роўна працуе, але кантролю над ботамі менш.',
     },
+    fr: {
+      "HTTPS missing":
+        "Le site s’ouvre sans cadenas (sans connexion sécurisée). Les visiteurs peuvent voir un avertissement du navigateur, et les moteurs font moins confiance.",
+      "HTTP does not redirect to HTTPS":
+        "Il existe une version sécurisée, mais l’adresse habituelle n’y redirige pas automatiquement. Les visiteurs peuvent atterrir sur la version non sécurisée.",
+      "Title tag missing":
+        "La page n’a pas de nom pour Google ni pour l’onglet du navigateur. Les résultats de recherche paraissent incomplets.",
+      "No meta description":
+        "Il n’y a pas de courte description pour les résultats de recherche. Google peut afficher un extrait aléatoire.",
+      "H1 missing":
+        "La page n’a pas de titre principal. Il est plus difficile de comprendre de quoi elle parle.",
+      "Canonical not specified":
+        "Les moteurs peuvent traiter des copies de cette page comme des pages séparées. Cela peut diluer votre visibilité.",
+      "Canonical points to unavailable URL":
+        "L’adresse « principale » de la page ne s’ouvre pas. Les moteurs peuvent se tromper de version à afficher.",
+      "Canonical cannot be read":
+        "Le réglage de l’adresse principale est cassé, donc les moteurs peuvent mal comprendre la version préférée.",
+      "Canonical points to different domain":
+        "La page pointe vers un autre site comme version principale. Le trafic et le crédit SEO peuvent partir ailleurs.",
+      "Meta robots blocks indexing or links":
+        "La page demande aux moteurs de ne pas l’indexer ou de ne pas suivre les liens. Elle peut ne pas apparaître dans Google.",
+      "robots.txt blocks page":
+        "Un fichier du site dit aux moteurs de ne pas vérifier cette page. Elle peut rester invisible dans la recherche.",
+      "Broken links found":
+        "Certains liens mènent nulle part. Les visiteurs voient des erreurs, et cela paraît peu professionnel.",
+      "Unreachable page resources found":
+        "Certaines images, styles ou scripts ne se chargent pas. Des parties de la page peuvent paraître cassées.",
+      "Mixed content found":
+        "Sur le site sécurisé, certains fichiers se chargent encore en non sécurisé. Les navigateurs peuvent les bloquer.",
+      "HTML too heavy":
+        "Le code de la page est très lourd. Sur un réseau faible ou un téléphone, le chargement peut être lent.",
+      "Very slow response":
+        "Le serveur répond trop lentement. Les gens peuvent partir avant l’ouverture de la page.",
+      "TLS certificate expired":
+        "Le certificat de sécurité a expiré. Les navigateurs avertiront que le site n’est pas sûr.",
+      "TLS certificate failed verification":
+        "Le certificat de sécurité semble incorrect. Les navigateurs peuvent bloquer ou faire fuir les visiteurs.",
+      "TLS certificate could not be verified":
+        "Nous n’avons pas pu confirmer le certificat de sécurité. Les visiteurs peuvent voir des alertes de confiance.",
+      "JSON-LD contains errors":
+        "Les informations enrichies pour Google sont mal écrites, donc Google peut les ignorer.",
+      "OG image unavailable":
+        "Quand le lien est partagé sur les réseaux, l’image d’aperçu ne s’ouvre pas.",
+      "OG image specified incorrectly":
+        "L’image d’aperçu social est mal définie, donc les partages peuvent paraître vides.",
+      "Open Graph incomplete":
+        "Les réseaux peuvent ne pas afficher un beau titre/description/image lors du partage.",
+      "Twitter Card incomplete":
+        "Sur X/Twitter, le lien partagé peut paraître pauvre, sans carte d’aperçu correcte.",
+      "No meta viewport":
+        "La page n’est pas préparée pour les téléphones. Sur mobile, l’affichage peut être gênant.",
+      "Charset not specified":
+        "L’encodage du texte n’est pas défini. Lettres et symboles peuvent s’afficher en caractères bizarres.",
+      "HTML lang not specified":
+        "La langue de la page n’est pas indiquée. Navigateurs et outils comprennent moins bien le contenu.",
+      "Unusual Content-Type":
+        "Le serveur envoie la page dans un format inattendu. Certains navigateurs ou bots peuvent mal la traiter.",
+      "Cookies missing protective flags":
+        "Les cookies de session/connexion ne sont pas pleinement protégés. Cela augmente le risque d’abus de compte.",
+      "Form fields missing label":
+        "Certains champs de formulaire n’ont pas de labels clairs. Les lecteurs d’écran (et d’autres) peuvent bloquer.",
+      "Links or buttons without clear text":
+        "Certains boutons ou liens n’ont pas de texte clair. On ne comprend pas sur quoi on clique.",
+      "Images missing width/height":
+        "Les images ne réservent pas d’espace pendant le chargement, donc la page peut sauter.",
+      "Image alt issues":
+        "Beaucoup d’images n’ont pas de description textuelle. Le site est moins accessible, et Google Images reçoit moins de signaux.",
+      "Heavy images found":
+        "Certaines images sont trop lourdes. La page devient lente, surtout sur mobile.",
+      "Static resources have weak caching":
+        "Les visiteurs qui reviennent retéléchargent encore et encore les mêmes fichiers. Le site paraît plus lent.",
+      "Compression not detected":
+        "Le serveur ne compresse pas les fichiers texte avant envoi. Le chargement prend plus de temps et de data mobile.",
+      "Heading hierarchy broken":
+        "Les titres sautent de niveaux (par ex. H2 vers H4). La structure est plus dure à suivre.",
+      "Empty headings found":
+        "Il y a des titres vides. Cela perturbe la navigation et l’accessibilité.",
+      "Little text on page":
+        "Il y a très peu de texte. Les moteurs peuvent traiter la page comme « fine » et mal la classer.",
+      "Favicon not found":
+        "Il n’y a pas d’icône de site. Dans les onglets et favoris, le site paraît inachevé.",
+      "hreflang errors found":
+        "Les liens de versions linguistiques sont mal configurés. La mauvaise langue peut apparaître dans la recherche.",
+      "Potentially low contrast found":
+        "Certains textes peuvent être difficiles à lire car ils se fondent dans le fond.",
+      "Sitemap not found":
+        "Il n’y a pas de fichier sitemap. Les moteurs peuvent découvrir les nouvelles pages plus lentement.",
+      "robots.txt not found":
+        "Il n’y a pas de robots.txt. Le crawl fonctionne quand même, mais vous contrôlez moins les bots.",
+    },
   };
 
   var patterns = [
@@ -220,66 +324,79 @@
       re: /^Server returned error \d+$/,
       en: 'The server is returning an error. For visitors the site looks unavailable.',
       be: 'Сервер вяртае памылку. Для наведвальнікаў сайт выглядае недаступным.',
+      fr: "Le serveur renvoie une erreur. Pour les visiteurs, le site paraît indisponible.",
     },
     {
       re: /^Page returned status [45]\d\d$/,
       en: 'The page opens with an error code. People cannot use it normally.',
       be: 'Старонка адкрываецца з кодам памылкі. Нармальна карыстацца ёй нельга.',
+      fr: "La page s’ouvre avec un code d’erreur. On ne peut pas l’utiliser normalement.",
     },
     {
       re: /^Very slow response \(\d+ ms\)$/,
       en: 'The server answers too slowly. People may leave before the page opens.',
       be: 'Сервер адказвае занадта павольна. Людзі могуць сысці, пакуль старонка не адкрыецца.',
+      fr: "Le serveur répond trop lentement. Les gens peuvent partir avant l’ouverture.",
     },
     {
       re: /^Slow server response \(\d+ ms\)$/,
       en: 'The site answers slower than comfortable. Loading feels sluggish.',
       be: 'Сайт адказвае павольней за камфортны ўзровень. Загрузка адчуваецца цяжкай.',
+      fr: "Le site répond plus lentement que confortable. Le chargement paraît lourd.",
     },
     {
       re: /^Estimated performance score: (\d+)\/100 \(grade [A-F]\)$/,
       en: 'Overall speed looks weak (about $1 out of 100). Visitors may feel the site is slow.',
       be: 'Агульная хуткасць выглядае слабай (каля $1 з 100). Наведвальнікі могуць адчуваць, што сайт тармозіць.',
+      fr: "La vitesse globale paraît faible (environ $1 sur 100). Les visiteurs peuvent sentir que le site rame.",
     },
     {
       re: /^Estimated Largest Contentful Paint:/,
       en: 'The main content appears too late. The page feels empty for too long.',
       be: 'Асноўны кантэнт з’яўляецца занадта позна. Старонка доўга выглядае пустой.',
+      fr: "Le contenu principal apparaît trop tard. La page reste vide trop longtemps.",
     },
     {
       re: /^Estimated Cumulative Layout Shift:/,
       en: 'The page jumps while loading. People can accidentally tap the wrong button.',
       be: 'Старонка «скача» падчас загрузкі. Людзі могуць выпадкова націснуць не тую кнопку.',
+      fr: "La page saute pendant le chargement. On peut taper le mauvais bouton par accident.",
     },
     {
       re: /^Estimated First Input Delay:/,
       en: 'After the page appears, the first tap/click reacts with a delay. It feels “frozen”.',
       be: 'Пасля з’яўлення старонкі першы націск/клік рэагуе з затрымкай. Адчуваецца, нібыта «завісла».',
+      fr: "Après l’apparition de la page, le premier tap/clic réagit avec délai. Sensation de « figé ».",
     },
     {
       re: /^Estimated Time to First Byte:/,
       en: 'The server starts answering late. Everything else has to wait.',
       be: 'Сервер пачынае адказваць позна. Усё астатняе чакае.',
+      fr: "Le serveur commence à répondre tard. Tout le reste doit attendre.",
     },
     {
       re: /^Estimated First Contentful Paint:/,
       en: 'The first text or picture appears late. Visitors stare at a blank screen longer.',
       be: 'Першы тэкст ці выява з’яўляюцца позна. Наведвальнікі даўжэй глядзяць на пусты экран.',
+      fr: "Le premier texte ou image apparaît tard. Les visiteurs regardent un écran vide plus longtemps.",
     },
     {
       re: /^Missing header /,
       en: 'An important security setting is missing. The site is less protected from common attacks.',
       be: 'Бракуе важнай налады бяспекі. Сайт горш абаронены ад тыповых атак.',
+      fr: "Un réglage de sécurité important manque. Le site est moins protégé contre les attaques courantes.",
     },
     {
       re: /^Multiple H1 found/,
       en: 'There are several main headings. The page topic becomes less clear.',
       be: 'Галоўных загалоўкаў некалькі. Тэма старонкі становіцца менш зразумелай.',
+      fr: "Il y a plusieurs titres principaux. Le sujet de la page devient moins clair.",
     },
   ];
 
   function getLang() {
-    return document.documentElement.getAttribute('data-lang') === 'be' ? 'be' : 'en';
+    var lang = document.documentElement.getAttribute('data-lang');
+    return lang === 'be' || lang === 'fr' ? lang : 'en';
   }
 
   function tUi(key) {
@@ -290,7 +407,7 @@
     var lang = getLang();
     var map = exact[lang] || exact.en;
     if (map[enTitle]) return map[enTitle];
-    if (exact.en[enTitle] && lang === 'be') {
+    if (exact.en[enTitle] && (lang === 'be' || lang === 'fr')) {
       // fall through to patterns / en fallback below
     } else if (exact.en[enTitle]) {
       return exact.en[enTitle];
@@ -329,10 +446,13 @@
       var score = Number(scoreEl.getAttribute('data-perf-score'));
       var grade = scoreEl.getAttribute('data-perf-grade') || '';
       if (score < 60 || grade === 'F' || grade === 'D') {
+        var lang = getLang();
         var msg =
-          getLang() === 'be'
+          lang === 'be'
             ? 'Хуткасць сайта зараз слабая. Людзі могуць сыходзіць, не дачакаўшыся загрузкі.'
-            : 'Site speed is currently weak. People may leave before the page finishes loading.';
+            : lang === 'fr'
+              ? 'La vitesse du site est actuellement faible. Les gens peuvent partir avant la fin du chargement.'
+              : 'Site speed is currently weak. People may leave before the page finishes loading.';
         if (items.indexOf(msg) === -1) items.push(msg);
       }
     }

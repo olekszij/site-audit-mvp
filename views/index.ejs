@@ -14,9 +14,9 @@
                 document.documentElement.setAttribute('data-theme', theme);
 
                 var savedLang = localStorage.getItem('site-audit-lang');
-                var lang = savedLang === 'be' || savedLang === 'en' ? savedLang : 'en';
+                var lang = savedLang === 'be' || savedLang === 'fr' || savedLang === 'en' ? savedLang : 'en';
                 document.documentElement.setAttribute('data-lang', lang);
-                document.documentElement.setAttribute('lang', lang === 'be' ? 'be' : 'en');
+                document.documentElement.setAttribute('lang', lang);
             } catch (e) {
                 document.documentElement.setAttribute('data-theme', 'dark');
                 document.documentElement.setAttribute('data-lang', 'en');
@@ -46,8 +46,9 @@
 <body class="min-h-screen bg-zinc-950 text-zinc-100 antialiased">
     <div class="ui-controls">
         <button type="button" id="lang-toggle" class="lang-toggle" aria-pressed="false" data-i18n-aria="lang.aria">
-            <span class="lang-label-be" data-i18n="lang.be">BE</span>
             <span class="lang-label-en" data-i18n="lang.en">EN</span>
+            <span class="lang-label-fr" data-i18n="lang.fr">FR</span>
+            <span class="lang-label-be" data-i18n="lang.be">BE</span>
         </button>
         <button type="button" id="theme-toggle" class="theme-toggle" aria-pressed="false" data-i18n-aria="theme.aria">
             <svg class="theme-toggle-icon icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
